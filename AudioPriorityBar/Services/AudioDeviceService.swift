@@ -149,6 +149,82 @@ class AudioDeviceService {
         )
     }
 
+    func isDeviceMuted(_ deviceId: AudioObjectID, type: AudioDeviceType) -> Bool {
+        let scope: AudioObjectPropertyScope = type == .input
+            ? kAudioDevicePropertyScopeInput
+            : kAudioDevicePropertyScopeOutput
+
+        // Try kAudioDevicePropertyMute (per-channel, element 0 is master)
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: scope,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var muted: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+
+        var status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &muted
+        )
+
+        if status == noErr && muted != 0 {
+            return true
+        }
+
+        // Try element 1 (first channel) if master didn't work
+        propertyAddress.mElement = 1
+        status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &muted
+        )
+
+        if status == noErr && muted != 0 {
+            return true
+        }
+
+        // Check if volume is essentially zero (some devices report this as muted)
+        if type == .output {
+            let volume = getDeviceVolume(deviceId)
+            if volume < 0.01 {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    func getDeviceVolume(_ deviceId: AudioObjectID) -> Float {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var volume: Float32 = 0
+        var dataSize = UInt32(MemoryLayout<Float32>.size)
+
+        let status = AudioObjectGetPropertyData(
+            deviceId,
+            &propertyAddress,
+            0,
+            nil,
+            &dataSize,
+            &volume
+        )
+
+        return status == noErr ? volume : 1.0
+    }
+
     func startListening() {
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,

@@ -20,34 +20,57 @@ struct AudioPriorityBarApp: App {
 struct MenuBarLabel: View {
     @EnvironmentObject var audioManager: AudioManager
 
-    var volumeLevel: Int {
-        if audioManager.volume <= 0 { return 0 }
-        else if audioManager.volume < 0.33 { return 1 }
-        else if audioManager.volume < 0.66 { return 2 }
-        else { return 3 }
-    }
-
     var iconName: String {
-        if audioManager.isCustomMode {
+        if audioManager.isActiveOutputMuted {
+            return "speaker.slash.fill"
+        } else if audioManager.isCustomMode {
             return "hand.raised.fill"
         } else if audioManager.currentMode == .headphone {
             return "headphones"
         } else {
-            switch volumeLevel {
-            case 0: return "speaker.fill"
-            case 1: return "speaker.wave.1.fill"
-            case 2: return "speaker.wave.2.fill"
-            default: return "speaker.wave.3.fill"
-            }
+            return "speaker.fill"
         }
     }
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
             Image(systemName: iconName)
-            Text("\(Int(audioManager.volume * 100))")
-                .font(.system(size: 9, weight: .medium, design: .rounded))
-                .monospacedDigit()
+                .font(.system(size: 12))
+                .foregroundColor(audioManager.isActiveOutputMuted ? .red : nil)
+
+            // Volume meter bars
+            VolumeMeterView(volume: audioManager.volume, isMuted: audioManager.isActiveOutputMuted)
+                .frame(width: 16, height: 11)
+        }
+    }
+}
+
+struct VolumeMeterView: View {
+    let volume: Float
+    let isMuted: Bool
+
+    private let barCount = 4
+    private let barSpacing: CGFloat = 1
+
+    var body: some View {
+        Canvas { context, size in
+            let barWidth = (size.width - CGFloat(barCount - 1) * barSpacing) / CGFloat(barCount)
+            let filledBars = isMuted ? 0 : Int(ceil(Double(volume) * Double(barCount)))
+
+            for i in 0..<barCount {
+                let x = CGFloat(i) * (barWidth + barSpacing)
+                let barHeight = size.height * CGFloat(i + 1) / CGFloat(barCount)
+                let y = size.height - barHeight
+
+                let rect = CGRect(x: x, y: y, width: barWidth, height: barHeight)
+                let path = Path(roundedRect: rect, cornerRadius: 1)
+
+                if i < filledBars {
+                    context.fill(path, with: .color(isMuted ? .red : .primary))
+                } else {
+                    context.fill(path, with: .color(.primary.opacity(0.25)))
+                }
+            }
         }
     }
 }
@@ -66,6 +89,9 @@ class AudioManager: ObservableObject {
     @Published var volume: Float = 0
     @Published var isEditMode: Bool = false
     @Published var isCustomMode: Bool = false  // Disables auto-switching
+    @Published var mutedDeviceIds: Set<AudioObjectID> = []
+    @Published var isActiveOutputMuted: Bool = false
+    @Published var isActiveInputMuted: Bool = false
 
     private let deviceService = AudioDeviceService()
     let priorityManager = PriorityManager()
@@ -77,6 +103,47 @@ class AudioManager: ObservableObject {
 
     func refreshVolume() {
         volume = deviceService.getOutputVolume()
+    }
+
+    func refreshMuteStatus() {
+        var muted: Set<AudioObjectID> = []
+
+        for device in inputDevices where device.isConnected {
+            if deviceService.isDeviceMuted(device.id, type: .input) {
+                muted.insert(device.id)
+            }
+        }
+
+        for device in speakerDevices where device.isConnected {
+            if deviceService.isDeviceMuted(device.id, type: .output) {
+                muted.insert(device.id)
+            }
+        }
+
+        for device in headphoneDevices where device.isConnected {
+            if deviceService.isDeviceMuted(device.id, type: .output) {
+                muted.insert(device.id)
+            }
+        }
+
+        mutedDeviceIds = muted
+
+        // Check if active devices are muted
+        if let outputId = currentOutputId {
+            isActiveOutputMuted = muted.contains(outputId)
+        } else {
+            isActiveOutputMuted = false
+        }
+
+        if let inputId = currentInputId {
+            isActiveInputMuted = muted.contains(inputId)
+        } else {
+            isActiveInputMuted = false
+        }
+    }
+
+    func isDeviceMuted(_ device: AudioDevice) -> Bool {
+        mutedDeviceIds.contains(device.id)
     }
 
     func setVolume(_ newVolume: Float) {
@@ -96,6 +163,7 @@ class AudioManager: ObservableObject {
         isCustomMode = priorityManager.isCustomMode
         refreshDevices()
         refreshVolume()
+        refreshMuteStatus()
         setupDeviceChangeListener()
         // Apply priority on startup (unless in custom mode)
         if !isCustomMode {
@@ -334,16 +402,34 @@ class AudioManager: ObservableObject {
     }
 
     private func applyHighestPriorityInput() {
-        if let highest = inputDevices.first {
-            applyInputDevice(highest)
+        // Find highest priority non-muted input device
+        for device in inputDevices where device.isConnected {
+            if !deviceService.isDeviceMuted(device.id, type: .input) {
+                applyInputDevice(device)
+                return
+            }
+        }
+        // Fallback: if all are muted, just use first one
+        if let first = inputDevices.first(where: { $0.isConnected }) {
+            applyInputDevice(first)
         }
     }
 
     private func applyHighestPriorityOutput() {
         let devices = activeOutputDevices
-        if let highest = devices.first {
-            applyOutputDevice(highest)
+        // Find highest priority non-muted output device
+        for device in devices where device.isConnected {
+            if !deviceService.isDeviceMuted(device.id, type: .output) {
+                applyOutputDevice(device)
+                refreshMuteStatus()
+                return
+            }
         }
+        // Fallback: if all are muted, just use first one
+        if let first = devices.first(where: { $0.isConnected }) {
+            applyOutputDevice(first)
+        }
+        refreshMuteStatus()
     }
 
     private func setupDeviceChangeListener() {
@@ -357,6 +443,7 @@ class AudioManager: ObservableObject {
 
     private func handleDeviceChange() {
         refreshDevices()
+        refreshMuteStatus()
         if !isCustomMode {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()

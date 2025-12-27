@@ -114,6 +114,10 @@ struct DeviceRowView: View {
         return stored.lastSeenRelative
     }
 
+    var isMuted: Bool {
+        device.isConnected && audioManager.isDeviceMuted(device)
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             // Reorder controls (on hover)
@@ -186,6 +190,16 @@ struct DeviceRowView: View {
                         Text(lastSeen)
                             .font(.system(size: 9))
                             .foregroundColor(.secondary.opacity(0.6))
+                    }
+
+                    // Muted indicator
+                    if isMuted {
+                        Text("Muted")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.red))
                     }
 
                     Spacer()

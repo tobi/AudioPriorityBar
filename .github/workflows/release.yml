@@ -7,6 +7,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-14
@@ -58,7 +61,6 @@ jobs:
             **Date:** ${{ github.event.head_commit.timestamp }}
           files: release/AudioPriorityBar.zip
           prerelease: true
-          make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

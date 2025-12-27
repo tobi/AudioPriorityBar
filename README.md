@@ -38,7 +38,7 @@ Click to open the popover with:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/AudioPriorityBar.git
+   git clone https://github.com/tobi/AudioPriorityBar.git
    cd AudioPriorityBar
    ```
 
@@ -50,7 +50,7 @@ Click to open the popover with:
 3. Build and run (⌘R)
 
 ### Download Release
-Check the [Releases](https://github.com/YOUR_USERNAME/AudioPriorityBar/releases) page for pre-built binaries.
+Check the [Releases](https://github.com/tobi/AudioPriorityBar/releases) page for pre-built binaries.
 
 ## Usage
 

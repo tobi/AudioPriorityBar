@@ -35,12 +35,67 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Import Code Signing Certificate
+        if: env.CERTIFICATE_BASE64 != ''
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
+          echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          security import "$CERTIFICATE_PATH" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Allow codesign to access the keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Sign App
+        if: env.DEVELOPER_ID_APPLICATION != ''
+        env:
+          DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+        run: |
+          codesign --force --deep --options runtime \
+            --entitlements AudioPriorityBar/AudioPriorityBar.entitlements \
+            --sign "$DEVELOPER_ID_APPLICATION" \
+            build/Build/Products/Release/AudioPriorityBar.app
+
+          codesign --verify --verbose=2 build/Build/Products/Release/AudioPriorityBar.app
+
       - name: Create App Bundle
         run: |
           mkdir -p release
           cp -R build/Build/Products/Release/AudioPriorityBar.app release/
           cd release
-          zip -r AudioPriorityBar.zip AudioPriorityBar.app
+          ditto -c -k --keepParent AudioPriorityBar.app AudioPriorityBar.zip
+
+      - name: Notarize App
+        if: env.APPLE_ID != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+        run: |
+          xcrun notarytool submit release/AudioPriorityBar.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$NOTARIZATION_PASSWORD" \
+            --wait
+
+          xcrun stapler staple release/AudioPriorityBar.app
+
+          # Re-create zip with stapled app
+          cd release
+          rm AudioPriorityBar.zip
+          ditto -c -k --keepParent AudioPriorityBar.app AudioPriorityBar.zip
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4

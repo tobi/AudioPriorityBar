@@ -64,7 +64,7 @@ struct MenuBarView: View {
                         )
                     }
 
-                    // Microphones (always shown, at the bottom)
+                    // Microphones (always shown)
                     DeviceSectionView(
                         title: "Microphones",
                         icon: "mic.fill",
@@ -76,6 +76,18 @@ struct MenuBarView: View {
                         onUnhide: { audioManager.unhideDevice($0, category: nil) },
                         category: nil,
                         showCategoryPicker: false
+                    )
+
+                    // Cameras (always shown, at the bottom)
+                    CameraSectionView(
+                        title: "Cameras",
+                        icon: "camera.fill",
+                        cameras: audioManager.cameraDevices,
+                        currentCameraId: audioManager.currentCameraId,
+                        onMove: audioManager.moveCameraDevice,
+                        onSelect: audioManager.setCameraDevice,
+                        onHide: { audioManager.hideCamera($0) },
+                        onUnhide: { audioManager.unhideCamera($0) }
                     )
                 }
                 .padding(12)
@@ -322,14 +334,22 @@ struct HiddenDevicesToggleView: View {
     @EnvironmentObject var audioManager: AudioManager
     @State private var isExpanded = false
 
-    var allHiddenDevices: [AudioDevice] {
+    var allHiddenAudioDevices: [AudioDevice] {
         audioManager.hiddenInputDevices +
         audioManager.hiddenSpeakerDevices +
         audioManager.hiddenHeadphoneDevices
     }
 
+    var allHiddenCameras: [CameraDevice] {
+        audioManager.hiddenCameraDevices
+    }
+
+    var totalHiddenCount: Int {
+        allHiddenAudioDevices.count + allHiddenCameras.count
+    }
+
     var body: some View {
-        if allHiddenDevices.isEmpty {
+        if totalHiddenCount == 0 {
             Text("")
                 .frame(height: 1)
         } else {
@@ -341,7 +361,7 @@ struct HiddenDevicesToggleView: View {
                         .font(.system(size: 8, weight: .semibold))
                     Image(systemName: "eye.slash")
                         .font(.system(size: 10))
-                    Text("\(allHiddenDevices.count) ignored")
+                    Text("\(totalHiddenCount) ignored")
                         .font(.system(size: 11))
                 }
                 .foregroundColor(.secondary)
@@ -349,8 +369,11 @@ struct HiddenDevicesToggleView: View {
             .buttonStyle(.plain)
             .popover(isPresented: $isExpanded, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(allHiddenDevices, id: \.id) { device in
+                    ForEach(allHiddenAudioDevices, id: \.id) { device in
                         HiddenDeviceRow(device: device)
+                    }
+                    ForEach(allHiddenCameras, id: \.id) { camera in
+                        HiddenCameraRow(camera: camera)
                     }
                 }
                 .padding(8)
@@ -392,6 +415,50 @@ struct HiddenDeviceRow: View {
             if isHovering {
                 Button {
                     audioManager.unhideDevice(device)
+                } label: {
+                    Image(systemName: "eye")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Stop ignoring")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovering ? Color.primary.opacity(0.05) : Color.clear)
+        )
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
+struct HiddenCameraRow: View {
+    @EnvironmentObject var audioManager: AudioManager
+    let camera: CameraDevice
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .frame(width: 16)
+
+            Text(camera.name)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer()
+
+            if isHovering {
+                Button {
+                    audioManager.unhideCamera(camera)
                 } label: {
                     Image(systemName: "eye")
                         .font(.system(size: 12))

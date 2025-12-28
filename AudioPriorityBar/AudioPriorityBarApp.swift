@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreAudio
+import AVFoundation
 
 @main
 struct AudioPriorityBarApp: App {
@@ -16,7 +17,8 @@ struct AudioPriorityBarApp: App {
                 isInputMuted: audioManager.isActiveInputMuted,
                 isCustomMode: audioManager.isCustomMode,
                 mode: audioManager.currentMode,
-                micFlash: audioManager.micFlashState
+                micFlash: audioManager.micFlashState,
+                hasCameras: !audioManager.cameraDevices.isEmpty
             )
         }
         .menuBarExtraStyle(.window)
@@ -30,9 +32,14 @@ struct MenuBarLabel: View {
     let isCustomMode: Bool
     let mode: OutputCategory
     let micFlash: Bool
+    var hasCameras: Bool = false
 
     var body: some View {
         HStack(spacing: 2) {
+            // Camera icon (leftmost)
+            if hasCameras {
+                Image(systemName: "camera.fill")
+            }
             if isInputMuted {
                 Image(systemName: micFlash ? "mic.fill" : "mic.slash.fill")
             }
@@ -89,8 +96,11 @@ class AudioManager: ObservableObject {
     @Published var hiddenInputDevices: [AudioDevice] = []
     @Published var hiddenSpeakerDevices: [AudioDevice] = []
     @Published var hiddenHeadphoneDevices: [AudioDevice] = []
+    @Published var cameraDevices: [CameraDevice] = []
+    @Published var hiddenCameraDevices: [CameraDevice] = []
     @Published var currentInputId: AudioObjectID?
     @Published var currentOutputId: AudioObjectID?
+    @Published var currentCameraId: String?
     @Published var currentMode: OutputCategory = .speaker
     @Published var volume: Float = 0
     @Published var isEditMode: Bool = false
@@ -101,9 +111,11 @@ class AudioManager: ObservableObject {
     @Published var micFlashState: Bool = false
 
     private let deviceService = AudioDeviceService()
+    private let cameraService = CameraDeviceService()
     private var micFlashTimer: Timer?
     let priorityManager = PriorityManager()
     private var connectedDeviceUIDs: Set<String> = []
+    private var connectedCameraUIDs: Set<String> = []
 
     var menuBarIcon: String {
         currentMode.icon
@@ -183,14 +195,17 @@ class AudioManager: ObservableObject {
         currentMode = priorityManager.currentMode
         isCustomMode = priorityManager.isCustomMode
         refreshDevices()
+        refreshCameras()
         refreshVolume()
         refreshMuteStatus()
         setupDeviceChangeListener()
         setupMuteVolumeListener()
+        setupCameraChangeListener()
         // Apply priority on startup (unless in custom mode)
         if !isCustomMode {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
+            applyHighestPriorityCamera()
         }
     }
 
@@ -280,6 +295,7 @@ class AudioManager: ObservableObject {
     func toggleEditMode() {
         isEditMode.toggle()
         refreshDevices()
+        refreshCameras()
     }
 
     func isDeviceConnected(_ device: AudioDevice) -> Bool {
@@ -306,6 +322,7 @@ class AudioManager: ObservableObject {
             // Exiting custom mode - apply highest priority
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
+            applyHighestPriorityCamera()
         }
     }
 
@@ -437,5 +454,104 @@ class AudioManager: ObservableObject {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
         }
+    }
+
+    // MARK: - Camera Management
+
+    func refreshCameras() {
+        let allConnectedCameras = cameraService.getDevices()
+
+        // Remember all connected cameras
+        connectedCameraUIDs = Set(allConnectedCameras.map { $0.uid })
+        for camera in allConnectedCameras {
+            priorityManager.rememberDevice(camera.uid, name: camera.name, type: .camera)
+        }
+
+        if isEditMode {
+            // In edit mode: show all known cameras, mark disconnected ones
+            let knownDevices = priorityManager.getKnownDevices()
+
+            var allCameras: [CameraDevice] = allConnectedCameras
+            for stored in knownDevices where stored.effectiveType == .camera {
+                if !connectedCameraUIDs.contains(stored.uid) {
+                    allCameras.append(.disconnected(uid: stored.uid, name: stored.name))
+                }
+            }
+
+            cameraDevices = priorityManager.sortCamerasByPriority(allCameras)
+            hiddenCameraDevices = []
+        } else {
+            // Normal mode: only show connected, non-hidden cameras
+            let visibleCameras = allConnectedCameras.filter { !priorityManager.isCameraHidden($0) }
+            let hiddenCameras = allConnectedCameras.filter { priorityManager.isCameraHidden($0) }
+
+            cameraDevices = priorityManager.sortCamerasByPriority(visibleCameras)
+            hiddenCameraDevices = hiddenCameras
+        }
+
+        // Update current camera ID
+        if let defaultCamera = cameraService.getDefaultDevice() {
+            currentCameraId = defaultCamera.id
+        }
+    }
+
+    private func setupCameraChangeListener() {
+        cameraService.onDevicesChanged = { [weak self] in
+            Task { @MainActor in
+                self?.handleCameraChange()
+            }
+        }
+        cameraService.startListening()
+    }
+
+    private func handleCameraChange() {
+        refreshCameras()
+        if !isCustomMode {
+            applyHighestPriorityCamera()
+        }
+    }
+
+    private func applyHighestPriorityCamera() {
+        if let first = cameraDevices.first(where: { $0.isConnected }) {
+            currentCameraId = first.id
+        }
+    }
+
+    func setCameraDevice(_ camera: CameraDevice) {
+        currentCameraId = camera.id
+    }
+
+    func moveCameraDevice(from source: IndexSet, to destination: Int) {
+        cameraDevices.move(fromOffsets: source, toOffset: destination)
+        priorityManager.saveCameraPriorities(cameraDevices)
+        if !isCustomMode {
+            applyHighestPriorityCamera()
+        }
+    }
+
+    func hideCamera(_ camera: CameraDevice) {
+        priorityManager.hideCamera(camera)
+        refreshCameras()
+        if !isCustomMode {
+            applyHighestPriorityCamera()
+        }
+    }
+
+    func unhideCamera(_ camera: CameraDevice) {
+        priorityManager.unhideCamera(camera)
+        refreshCameras()
+    }
+
+    func isCameraHidden(_ camera: CameraDevice) -> Bool {
+        priorityManager.isCameraHidden(camera)
+    }
+
+    func isCameraConnected(_ camera: CameraDevice) -> Bool {
+        connectedCameraUIDs.contains(camera.uid)
+    }
+
+    func forgetCamera(_ camera: CameraDevice) {
+        priorityManager.forgetCamera(camera.uid)
+        refreshCameras()
     }
 }

@@ -1,10 +1,25 @@
 import Foundation
 
+enum StoredDeviceType: String, Codable {
+    case audioInput
+    case audioOutput
+    case camera
+}
+
 struct StoredDevice: Codable, Equatable {
     let uid: String
     let name: String
-    let isInput: Bool
+    let isInput: Bool  // Legacy: for audio devices
     var lastSeen: Date
+    var deviceType: StoredDeviceType?  // New: explicit device type
+
+    // Computed property for backwards compatibility
+    var effectiveType: StoredDeviceType {
+        if let type = deviceType {
+            return type
+        }
+        return isInput ? .audioInput : .audioOutput
+    }
 
     var lastSeenRelative: String {
         let now = Date()
@@ -37,11 +52,13 @@ class PriorityManager {
     private let inputPrioritiesKey = "inputPriorities"
     private let speakerPrioritiesKey = "speakerPriorities"
     private let headphonePrioritiesKey = "headphonePriorities"
+    private let cameraPrioritiesKey = "cameraPriorities"
     private let deviceCategoriesKey = "deviceCategories"
     private let currentModeKey = "currentMode"
     private let customModeKey = "customMode"
     private let hiddenDevicesKey = "hiddenDevices"
     private let knownDevicesKey = "knownDevices"
+    private let hiddenCamerasKey = "hiddenCameras"
 
     // MARK: - Known Devices (Persistent Memory)
 
@@ -54,13 +71,17 @@ class PriorityManager {
     }
 
     func rememberDevice(_ uid: String, name: String, isInput: Bool) {
+        rememberDevice(uid, name: name, type: isInput ? .audioInput : .audioOutput)
+    }
+
+    func rememberDevice(_ uid: String, name: String, type: StoredDeviceType) {
         var known = getKnownDevices()
         let now = Date()
         if let index = known.firstIndex(where: { $0.uid == uid }) {
             // Update name and lastSeen
-            known[index] = StoredDevice(uid: uid, name: name, isInput: isInput, lastSeen: now)
+            known[index] = StoredDevice(uid: uid, name: name, isInput: type == .audioInput, lastSeen: now, deviceType: type)
         } else {
-            known.append(StoredDevice(uid: uid, name: name, isInput: isInput, lastSeen: now))
+            known.append(StoredDevice(uid: uid, name: name, isInput: type == .audioInput, lastSeen: now, deviceType: type))
         }
         saveKnownDevices(known)
     }
@@ -196,6 +217,56 @@ class PriorityManager {
     func savePriorities(_ devices: [AudioDevice], category: OutputCategory) {
         let key = priorityKey(for: .output, category: category)
         savePriorities(devices, key: key)
+    }
+
+    // MARK: - Camera Priority Management
+
+    func sortCamerasByPriority(_ cameras: [CameraDevice]) -> [CameraDevice] {
+        let priorities = defaults.array(forKey: cameraPrioritiesKey) as? [String] ?? []
+
+        return cameras.sorted { a, b in
+            let indexA = priorities.firstIndex(of: a.uid) ?? Int.max
+            let indexB = priorities.firstIndex(of: b.uid) ?? Int.max
+            return indexA < indexB
+        }
+    }
+
+    func saveCameraPriorities(_ cameras: [CameraDevice]) {
+        let uids = cameras.map { $0.uid }
+        defaults.set(uids, forKey: cameraPrioritiesKey)
+    }
+
+    // MARK: - Camera Hidden Management
+
+    func isCameraHidden(_ camera: CameraDevice) -> Bool {
+        let hidden = defaults.array(forKey: hiddenCamerasKey) as? [String] ?? []
+        return hidden.contains(camera.uid)
+    }
+
+    func hideCamera(_ camera: CameraDevice) {
+        var hidden = defaults.array(forKey: hiddenCamerasKey) as? [String] ?? []
+        if !hidden.contains(camera.uid) {
+            hidden.append(camera.uid)
+            defaults.set(hidden, forKey: hiddenCamerasKey)
+        }
+    }
+
+    func unhideCamera(_ camera: CameraDevice) {
+        var hidden = defaults.array(forKey: hiddenCamerasKey) as? [String] ?? []
+        hidden.removeAll { $0 == camera.uid }
+        defaults.set(hidden, forKey: hiddenCamerasKey)
+    }
+
+    func forgetCamera(_ uid: String) {
+        forgetDevice(uid)
+        // Also remove from camera priorities
+        var priorities = defaults.array(forKey: cameraPrioritiesKey) as? [String] ?? []
+        priorities.removeAll { $0 == uid }
+        defaults.set(priorities, forKey: cameraPrioritiesKey)
+        // Remove from hidden
+        var hidden = defaults.array(forKey: hiddenCamerasKey) as? [String] ?? []
+        hidden.removeAll { $0 == uid }
+        defaults.set(hidden, forKey: hiddenCamerasKey)
     }
 
     // MARK: - Private Helpers

@@ -17,8 +17,7 @@ struct AudioPriorityBarApp: App {
                 isInputMuted: audioManager.isActiveInputMuted,
                 isCustomMode: audioManager.isCustomMode,
                 mode: audioManager.currentMode,
-                micFlash: audioManager.micFlashState,
-                hasCameras: !audioManager.cameraDevices.isEmpty
+                micFlash: audioManager.micFlashState
             )
         }
         .menuBarExtraStyle(.window)
@@ -32,14 +31,9 @@ struct MenuBarLabel: View {
     let isCustomMode: Bool
     let mode: OutputCategory
     let micFlash: Bool
-    var hasCameras: Bool = false
 
     var body: some View {
         HStack(spacing: 2) {
-            // Camera icon (leftmost)
-            if hasCameras {
-                Image(systemName: "camera.fill")
-            }
             if isInputMuted {
                 Image(systemName: micFlash ? "mic.fill" : "mic.slash.fill")
             }

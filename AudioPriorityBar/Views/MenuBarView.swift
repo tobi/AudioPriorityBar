@@ -164,7 +164,7 @@ struct ModeToggleView: View {
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 10)
                             .fill(isSelected ? Color.accentColor : Color.clear)
                     )
                     .foregroundColor(isSelected ? .white : .secondary)
@@ -184,7 +184,7 @@ struct ModeToggleView: View {
                     .padding(.vertical, 8)
                     .contentShape(Rectangle())
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 10)
                             .fill(audioManager.isCustomMode ? Color.orange : Color.clear)
                     )
                     .foregroundColor(audioManager.isCustomMode ? .white : .secondary)
@@ -194,7 +194,7 @@ struct ModeToggleView: View {
         }
         .padding(4)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(Color.primary.opacity(0.05))
         )
         .animation(.easeInOut(duration: 0.2), value: audioManager.currentMode)
@@ -428,7 +428,7 @@ struct HiddenDeviceRow: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 10)
                 .fill(isHovering ? Color.primary.opacity(0.06) : Color.clear)
         )
         .animation(.easeInOut(duration: 0.15), value: isHovering)

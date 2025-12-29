@@ -183,6 +183,7 @@ class AudioManager: ObservableObject {
         currentMode = priorityManager.currentMode
         isCustomMode = priorityManager.isCustomMode
         refreshDevices()
+        previousConnectedUIDs = connectedDeviceUIDs  // Initialize tracking
         refreshVolume()
         refreshMuteStatus()
         setupDeviceChangeListener()
@@ -286,6 +287,9 @@ class AudioManager: ObservableObject {
         connectedDeviceUIDs.contains(device.uid)
     }
 
+    /// Tracks device UIDs from the previous refresh to detect new connections
+    private var previousConnectedUIDs: Set<String> = []
+    
     func setMode(_ mode: OutputCategory) {
         currentMode = mode
         priorityManager.currentMode = mode
@@ -368,24 +372,27 @@ class AudioManager: ObservableObject {
     func moveInputDevice(from source: IndexSet, to destination: Int) {
         inputDevices.move(fromOffsets: source, toOffset: destination)
         priorityManager.savePriorities(inputDevices, type: .input)
-        if !isCustomMode {
-            applyHighestPriorityInput()
+        // Switch to top input if it's connected
+        if let topInput = inputDevices.first, topInput.isConnected {
+            applyInputDevice(topInput)
         }
     }
 
     func moveSpeakerDevice(from source: IndexSet, to destination: Int) {
         speakerDevices.move(fromOffsets: source, toOffset: destination)
         priorityManager.savePriorities(speakerDevices, category: .speaker)
-        if !isCustomMode && currentMode == .speaker {
-            applyHighestPriorityOutput()
+        // Switch to top speaker only if we're in speaker mode and top speaker is connected
+        if currentMode == .speaker, let topSpeaker = speakerDevices.first, topSpeaker.isConnected {
+            applyOutputDevice(topSpeaker)
         }
     }
 
     func moveHeadphoneDevice(from source: IndexSet, to destination: Int) {
         headphoneDevices.move(fromOffsets: source, toOffset: destination)
         priorityManager.savePriorities(headphoneDevices, category: .headphone)
-        if !isCustomMode && currentMode == .headphone {
-            applyHighestPriorityOutput()
+        // Switch to top headphone if it's connected
+        if let topHeadphone = headphoneDevices.first, topHeadphone.isConnected {
+            applyOutputDevice(topHeadphone)
         }
     }
 
@@ -431,11 +438,42 @@ class AudioManager: ObservableObject {
     }
 
     private func handleDeviceChange() {
+        let oldConnectedUIDs = previousConnectedUIDs
         refreshDevices()
         refreshMuteStatus()
+        
+        // Detect newly connected devices
+        let newlyConnectedUIDs = connectedDeviceUIDs.subtracting(oldConnectedUIDs)
+        previousConnectedUIDs = connectedDeviceUIDs
+        
         if !isCustomMode {
+            // Auto-switch mode only when a new headphone connects or all headphones disconnect
+            autoSwitchModeIfNeeded(newlyConnectedUIDs: newlyConnectedUIDs)
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
+        }
+    }
+    
+    /// Automatically switches between headphone and speaker mode based on device connections.
+    /// Only triggers on:
+    /// 1. A new headphone device connects → switch to headphone mode
+    /// 2. All headphones disconnect → switch to speaker mode
+    private func autoSwitchModeIfNeeded(newlyConnectedUIDs: Set<String>) {
+        let connectedHeadphones = headphoneDevices.filter { $0.isConnected }
+        let hasConnectedHeadphones = !connectedHeadphones.isEmpty
+        let hasConnectedSpeakers = speakerDevices.contains { $0.isConnected }
+        
+        // Check if a new headphone just connected
+        let newHeadphoneConnected = connectedHeadphones.contains { newlyConnectedUIDs.contains($0.uid) }
+        
+        if newHeadphoneConnected && currentMode != .headphone {
+            // A new headphone just connected - switch to headphone mode
+            currentMode = .headphone
+            priorityManager.currentMode = .headphone
+        } else if !hasConnectedHeadphones && hasConnectedSpeakers && currentMode == .headphone {
+            // All headphones disconnected - switch back to speaker mode
+            currentMode = .speaker
+            priorityManager.currentMode = .speaker
         }
     }
 }

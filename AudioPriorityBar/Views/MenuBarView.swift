@@ -91,6 +91,9 @@ struct MenuBarView: View {
                 }
 
                 Spacer()
+                
+                // Launch at login toggle
+                LaunchAtLoginToggle()
 
                 // Edit mode toggle
                 Button {
@@ -410,5 +413,27 @@ struct HiddenDeviceRow: View {
         .onHover { hovering in
             isHovering = hovering
         }
+    }
+}
+
+struct LaunchAtLoginToggle: View {
+    @StateObject private var launchManager = LaunchAtLoginManager.shared
+    
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                launchManager.isEnabled.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: launchManager.isEnabled ? "power.circle.fill" : "power.circle")
+                    .font(.system(size: 12))
+                Text("Login")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(launchManager.isEnabled ? .accentColor : .secondary)
+        }
+        .buttonStyle(.plain)
+        .help(launchManager.isEnabled ? "Disable launch at login" : "Enable launch at login")
     }
 }

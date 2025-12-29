@@ -179,6 +179,10 @@ class AudioManager: ObservableObject {
         }
     }
 
+    var allHiddenDevices: [AudioDevice] {
+        hiddenInputDevices + hiddenSpeakerDevices + hiddenHeadphoneDevices
+    }
+
     init() {
         currentMode = priorityManager.currentMode
         isCustomMode = priorityManager.isCustomMode

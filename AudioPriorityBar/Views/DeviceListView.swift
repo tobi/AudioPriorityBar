@@ -13,7 +13,7 @@ struct DeviceListView: View {
     var category: OutputCategory? = nil
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 1) {
             ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
                 DeviceRowView(
                     device: device,
@@ -54,17 +54,17 @@ struct DeviceDragPreview: View {
     let name: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             Image(systemName: "line.3.horizontal")
-                .font(.system(size: 10))
+                .font(.system(size: 9))
             Text(name)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .background(Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(6)
-        .shadow(radius: 4)
+        .cornerRadius(4)
+        .shadow(radius: 3)
     }
 }
 
@@ -119,7 +119,7 @@ struct DeviceRowView: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             // Priority label OR reorder controls (on hover)
             if !isHiddenSection {
                 ZStack {
@@ -129,8 +129,8 @@ struct DeviceRowView: View {
                             onMoveUp?()
                         } label: {
                             Image(systemName: "chevron.up")
-                                .font(.system(size: 9, weight: .semibold))
-                                .frame(width: 14)
+                                .font(.system(size: 8, weight: .semibold))
+                                .frame(width: 12)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -138,16 +138,16 @@ struct DeviceRowView: View {
                         .disabled(onMoveUp == nil)
 
                         Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 9))
+                            .font(.system(size: 8))
                             .foregroundColor(.secondary)
-                            .frame(width: 10)
+                            .frame(width: 8)
 
                         Button {
                             onMoveDown?()
                         } label: {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .semibold))
-                                .frame(width: 14)
+                                .font(.system(size: 8, weight: .semibold))
+                                .frame(width: 12)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -156,22 +156,19 @@ struct DeviceRowView: View {
                     }
                     .opacity(isHovering ? 1 : 0)
 
-                    // Priority number or "Active" label when not hovering
-                    Group {
-                        if isSelected && !isDisconnected {
-                            Text("Active")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(.accentColor)
-                        } else {
-                            Text("\(index + 1)")
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .opacity(isHovering ? 0 : 1)
+                    // Priority number when not hovering
+                    Text("\(index + 1)")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(isSelected && !isDisconnected ? .accentColor : .secondary)
+                        .opacity(isHovering ? 0 : 1)
                 }
-                .frame(width: 38)
+                .frame(width: 32)
             }
+
+            // Active indicator dot
+            Circle()
+                .fill(isSelected && !isDisconnected ? Color.accentColor : Color.clear)
+                .frame(width: 5, height: 5)
 
             // Device name
             Button(action: {
@@ -179,9 +176,9 @@ struct DeviceRowView: View {
                     onSelect()
                 }
             }) {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     Text(device.name)
-                        .font(.system(size: 13))
+                        .font(.system(size: 11))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundColor(isGrayed ? .secondary : .primary)
@@ -189,34 +186,28 @@ struct DeviceRowView: View {
                     // Status indicator
                     if let icon = statusIcon {
                         Image(systemName: icon)
-                            .font(.system(size: 9))
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary.opacity(0.6))
                     }
 
                     // Last seen time for disconnected devices
                     if let lastSeen = lastSeenText {
                         Text(lastSeen)
-                            .font(.system(size: 9))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary.opacity(0.5))
                     }
 
                     // Muted indicator
                     if isMuted {
                         Text("Muted")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: 8, weight: .medium))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
                             .background(Capsule().fill(Color.red))
                     }
 
                     Spacer()
-
-                    if isSelected && !isDisconnected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.accentColor)
-                            .font(.system(size: 14))
-                    }
                 }
                 .contentShape(Rectangle())
             }
@@ -278,27 +269,23 @@ struct DeviceRowView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 13))
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 10))
                         .foregroundColor(.secondary)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
                 .menuStyle(.borderlessButton)
-                .frame(width: 24)
+                .frame(width: 20)
             }
         }
         .padding(.leading, 2)
-        .padding(.trailing, 6)
-        .padding(.vertical, 5)
-        .opacity(isGrayed ? 0.6 : 1.0)
+        .padding(.trailing, 4)
+        .padding(.vertical, 4)
+        .opacity(isGrayed ? 0.5 : 1.0)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected && !isDisconnected ? Color.accentColor.opacity(0.1) : (isHovering ? Color.primary.opacity(0.05) : Color.clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected && !isDisconnected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isHovering ? Color.primary.opacity(0.04) : Color.clear)
         )
         .onHover { hovering in
             isHovering = hovering

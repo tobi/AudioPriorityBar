@@ -13,6 +13,9 @@
 		A10000000000000000000004 /* PriorityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* PriorityManager.swift */; };
 		A10000000000000000000005 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* MenuBarView.swift */; };
 		A10000000000000000000006 /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* DeviceListView.swift */; };
+		A10000000000000000000007 /* StoredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* StoredDevice.swift */; };
+		A10000000000000000000008 /* AudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* AudioManager.swift */; };
+		A10000000000000000000009 /* NowPlayingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* NowPlayingService.swift */; };
 		A10000000000000000000010 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* CoreAudio.framework */; };
 		A10000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -25,6 +28,9 @@
 		A20000000000000000000005 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		A20000000000000000000006 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000008 /* StoredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredDevice.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* AudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioManager.swift; sourceTree = "<group>"; };
+		A2000000000000000000000A /* NowPlayingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingService.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		A20000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A30000000000000000000001 /* AudioPriorityBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioPriorityBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -57,6 +63,7 @@
 				A20000000000000000000001 /* AudioPriorityBarApp.swift */,
 				A50000000000000000000003 /* Models */,
 				A50000000000000000000004 /* Services */,
+				A50000000000000000000008 /* ViewModels */,
 				A50000000000000000000005 /* Views */,
 				A20000000000000000000020 /* Assets.xcassets */,
 				A20000000000000000000007 /* Info.plist */,
@@ -68,6 +75,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000002 /* AudioDevice.swift */,
+				A20000000000000000000008 /* StoredDevice.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -76,9 +84,18 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000003 /* AudioDeviceService.swift */,
+				A2000000000000000000000A /* NowPlayingService.swift */,
 				A20000000000000000000004 /* PriorityManager.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		A50000000000000000000008 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000009 /* AudioManager.swift */,
+			);
+			path = ViewModels;
 			sourceTree = "<group>";
 		};
 		A50000000000000000000005 /* Views */ = {
@@ -177,8 +194,11 @@
 			files = (
 				A10000000000000000000001 /* AudioPriorityBarApp.swift in Sources */,
 				A10000000000000000000002 /* AudioDevice.swift in Sources */,
+				A10000000000000000000007 /* StoredDevice.swift in Sources */,
 				A10000000000000000000003 /* AudioDeviceService.swift in Sources */,
+				A10000000000000000000009 /* NowPlayingService.swift in Sources */,
 				A10000000000000000000004 /* PriorityManager.swift in Sources */,
+				A10000000000000000000008 /* AudioManager.swift in Sources */,
 				A10000000000000000000005 /* MenuBarView.swift in Sources */,
 				A10000000000000000000006 /* DeviceListView.swift in Sources */,
 			);

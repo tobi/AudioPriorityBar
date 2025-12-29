@@ -96,9 +96,20 @@ struct MenuBarView: View {
 
 struct FooterView: View {
     @EnvironmentObject var audioManager: AudioManager
+    @EnvironmentObject var nowPlayingService: NowPlayingService
 
     var body: some View {
         VStack(spacing: 0) {
+            // Now Playing (if something is playing)
+            if nowPlayingService.nowPlaying != nil {
+                NowPlayingView()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+
+                Divider()
+                    .padding(.horizontal, 10)
+            }
+
             // Hidden devices toggle (only in normal mode)
             if !audioManager.isEditMode && !audioManager.allHiddenDevices.isEmpty {
                 HiddenDevicesToggleView()
@@ -154,6 +165,100 @@ struct FooterView: View {
                 .keyboardShortcut("q", modifiers: .command)
             }
             .padding(.vertical, 2)
+        }
+    }
+}
+
+// MARK: - Now Playing
+
+struct NowPlayingView: View {
+    @EnvironmentObject var nowPlayingService: NowPlayingService
+    @State private var isHovering = false
+
+    var body: some View {
+        if let nowPlaying = nowPlayingService.nowPlaying {
+            HStack(spacing: 8) {
+                // Album art or app icon
+                Group {
+                    if let artwork = nowPlaying.artwork {
+                        Image(nsImage: artwork)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else if let appIcon = nowPlaying.appIcon {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        Image(systemName: "music.note")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(width: 32, height: 32)
+                .cornerRadius(4)
+                .clipped()
+
+                // Track info
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(nowPlaying.title ?? "Unknown")
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    if let artist = nowPlaying.artist {
+                        Text(artist)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Playback controls
+                HStack(spacing: 2) {
+                    Button {
+                        nowPlayingService.previousTrack()
+                    } label: {
+                        Image(systemName: "backward.fill")
+                            .font(.system(size: 9))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+
+                    Button {
+                        nowPlayingService.togglePlayPause()
+                    } label: {
+                        Image(systemName: nowPlayingService.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 11))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.primary)
+
+                    Button {
+                        nowPlayingService.nextTrack()
+                    } label: {
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 9))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                }
+            }
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.primary.opacity(isHovering ? 0.06 : 0.03))
+            )
+            .onHover { hovering in
+                isHovering = hovering
+            }
         }
     }
 }

@@ -4,11 +4,13 @@ import CoreAudio
 @main
 struct AudioPriorityBarApp: App {
     @StateObject private var audioManager = AudioManager()
+    @StateObject private var nowPlayingService = NowPlayingService()
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarView()
                 .environmentObject(audioManager)
+                .environmentObject(nowPlayingService)
         } label: {
             MenuBarLabel(
                 volume: audioManager.volume,

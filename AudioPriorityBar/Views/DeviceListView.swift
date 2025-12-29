@@ -93,13 +93,19 @@ struct DeviceRowView: View {
         audioManager.isDeviceIgnored(device, inCategory: category)
     }
 
+    var isAlwaysIgnored: Bool {
+        audioManager.isAlwaysIgnored(device)
+    }
+
     var isGrayed: Bool {
-        isDisconnected || isHiddenSection
+        isDisconnected || isHiddenSection || isAlwaysIgnored
     }
 
     var statusIcon: String? {
         if isDisconnected {
             return "wifi.slash"
+        } else if isAlwaysIgnored {
+            return "forward.fill"
         } else if isIgnored && audioManager.isEditMode {
             return "eye.slash"
         }
@@ -197,7 +203,16 @@ struct DeviceRowView: View {
                             .foregroundColor(.secondary.opacity(0.5))
                     }
 
-                    // Muted indicator
+                    // Status badges
+                    if isAlwaysIgnored {
+                        Text("Skip")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.orange))
+                    }
+
                     if isMuted {
                         Text("Muted")
                             .font(.system(size: 8, weight: .medium))
@@ -231,28 +246,45 @@ struct DeviceRowView: View {
                         Divider()
                     }
 
-                    if isHiddenSection || isIgnored {
+                    // Always ignore toggle (visible for connected devices)
+                    if !isDisconnected {
                         Button {
-                            audioManager.unhideDevice(device)
+                            audioManager.setAlwaysIgnored(device, ignored: !isAlwaysIgnored)
                         } label: {
-                            Label("Stop Ignoring", systemImage: "eye")
-                        }
-                    } else {
-                        if let onHide {
-                            Button {
-                                onHide(device)
-                            } label: {
-                                let categoryLabel = device.type == .input ? "microphone" :
-                                    (category == .headphone ? "headphone" : "speaker")
-                                Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
+                            if isAlwaysIgnored {
+                                Label("Stop Skipping", systemImage: "play.fill")
+                            } else {
+                                Label("Always Skip", systemImage: "forward.fill")
                             }
+                        }
+                    }
 
-                            // "Ignore entirely" option for output devices
-                            if device.type == .output {
+                    if !isAlwaysIgnored {
+                        if isHiddenSection || isIgnored {
+                            Button {
+                                audioManager.unhideDevice(device)
+                            } label: {
+                                Label("Stop Ignoring", systemImage: "eye")
+                            }
+                        } else {
+                            if let onHide {
+                                Divider()
+
                                 Button {
-                                    audioManager.hideDeviceEntirely(device)
+                                    onHide(device)
                                 } label: {
-                                    Label("Ignore entirely", systemImage: "eye.slash.fill")
+                                    let categoryLabel = device.type == .input ? "microphone" :
+                                        (category == .headphone ? "headphone" : "speaker")
+                                    Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
+                                }
+
+                                // "Ignore entirely" option for output devices
+                                if device.type == .output {
+                                    Button {
+                                        audioManager.hideDeviceEntirely(device)
+                                    } label: {
+                                        Label("Ignore entirely", systemImage: "eye.slash.fill")
+                                    }
                                 }
                             }
                         }

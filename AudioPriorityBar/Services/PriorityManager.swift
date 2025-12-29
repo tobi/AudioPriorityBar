@@ -86,6 +86,27 @@ class PriorityManager {
         defaults.set(categories, forKey: deviceCategoriesKey)
     }
 
+    // MARK: - Always Ignored Devices (never auto-selected)
+
+    private let alwaysIgnoredKey = "alwaysIgnoredDevices"
+
+    func isAlwaysIgnored(_ device: AudioDevice) -> Bool {
+        let ignored = defaults.array(forKey: alwaysIgnoredKey) as? [String] ?? []
+        return ignored.contains(device.uid)
+    }
+
+    func setAlwaysIgnored(_ device: AudioDevice, ignored: Bool) {
+        var list = defaults.array(forKey: alwaysIgnoredKey) as? [String] ?? []
+        if ignored {
+            if !list.contains(device.uid) {
+                list.append(device.uid)
+            }
+        } else {
+            list.removeAll { $0 == device.uid }
+        }
+        defaults.set(list, forKey: alwaysIgnoredKey)
+    }
+
     // MARK: - Hidden Devices (per category)
 
     private let hiddenMicsKey = "hiddenMics"

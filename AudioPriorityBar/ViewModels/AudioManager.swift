@@ -309,6 +309,24 @@ class AudioManager: ObservableObject {
         }
     }
 
+    // MARK: - Always Ignored (never auto-selected)
+
+    func isAlwaysIgnored(_ device: AudioDevice) -> Bool {
+        priorityManager.isAlwaysIgnored(device)
+    }
+
+    func setAlwaysIgnored(_ device: AudioDevice, ignored: Bool) {
+        priorityManager.setAlwaysIgnored(device, ignored: ignored)
+        refreshDevices()
+        if !isCustomMode {
+            if device.type == .input {
+                applyHighestPriorityInput()
+            } else {
+                applyHighestPriorityOutput()
+            }
+        }
+    }
+
     // MARK: - Device Reordering
 
     func moveInputDevice(from source: IndexSet, to destination: Int) {
@@ -358,14 +376,16 @@ class AudioManager: ObservableObject {
     }
 
     private func applyHighestPriorityInput() {
-        if let first = inputDevices.first(where: { $0.isConnected }) {
+        // Find first connected device that isn't always-ignored
+        if let first = inputDevices.first(where: { $0.isConnected && !priorityManager.isAlwaysIgnored($0) }) {
             applyInputDevice(first)
         }
     }
 
     private func applyHighestPriorityOutput() {
         let devices = activeOutputDevices
-        if let first = devices.first(where: { $0.isConnected }) {
+        // Find first connected device that isn't always-ignored
+        if let first = devices.first(where: { $0.isConnected && !priorityManager.isAlwaysIgnored($0) }) {
             applyOutputDevice(first)
         }
         refreshMuteStatus()

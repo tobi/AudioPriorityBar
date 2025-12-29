@@ -1,36 +1,5 @@
 import Foundation
 
-struct StoredDevice: Codable, Equatable {
-    let uid: String
-    let name: String
-    let isInput: Bool
-    var lastSeen: Date
-
-    var lastSeenRelative: String {
-        let now = Date()
-        let interval = now.timeIntervalSince(lastSeen)
-
-        if interval < 60 {
-            return "now"
-        } else if interval < 3600 {
-            let mins = Int(interval / 60)
-            return "\(mins)m ago"
-        } else if interval < 86400 {
-            let hours = Int(interval / 3600)
-            return "\(hours)h ago"
-        } else if interval < 604800 {
-            let days = Int(interval / 86400)
-            return "\(days)d ago"
-        } else if interval < 2592000 {
-            let weeks = Int(interval / 604800)
-            return "\(weeks)w ago"
-        } else {
-            let months = Int(interval / 2592000)
-            return "\(months)mo ago"
-        }
-    }
-}
-
 class PriorityManager {
     private let defaults = UserDefaults.standard
 

@@ -104,6 +104,7 @@ struct DraggableDeviceRow: View {
     
     @State private var isHovering = false
     @State private var lastReportedTarget: Int? = nil
+    @State private var isTransitioning = false
 
     var isDisconnected: Bool {
         !device.isConnected
@@ -156,235 +157,259 @@ struct DraggableDeviceRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Drag handle + priority label area
-            if !isHiddenSection {
-                ZStack {
-                    // Drag handle icon
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(width: 36, height: rowHeight)
-                        .opacity(isHovering || isDragging ? 1 : 0)
-                        .scaleEffect(isHovering || isDragging ? 1 : 0.8)
-                    
-                    // Priority number or "Active" label when not hovering
-                    Group {
-                        if isSelected && !isDisconnected {
-                            Text("Active")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.accentColor)
-                        } else {
-                            Text("\(index + 1)")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.secondary.opacity(0.8))
+        if #available(macOS 14.0, *) {
+            HStack(spacing: 0) {
+                // Drag handle + checkmark/priority area
+                if !isHiddenSection {
+                    ZStack {
+                        // Drag handle icon (shown on hover)
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 36, height: rowHeight)
+                            .opacity(isHovering || isDragging ? 1 : 0)
+                            .scaleEffect(isHovering || isDragging ? 1 : (isTransitioning ? 0.9 : 0.8))
+                            .blur(radius: isTransitioning ? 1 : 0)
+                        
+                        // Checkmark for selected, priority number for others
+                        Group {
+                            if isSelected && !isDisconnected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.green)
+                            } else {
+                                Text("\(index + 1)")
+                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(.secondary.opacity(0.8))
+                            }
                         }
+                        .opacity(isHovering || isDragging ? 0 : 1)
+                        .scaleEffect(isHovering || isDragging ? 0.8 : (isTransitioning ? 0.9 : 1))
+                        .blur(radius: isTransitioning ? 1 : 0)
                     }
-                    .opacity(isHovering || isDragging ? 0 : 1)
-                    .scaleEffect(isHovering || isDragging ? 0.8 : 1)
+                    .frame(width: 36)
+                    .animation(.easeInOut(duration: 0.12), value: isHovering)
+                    .animation(.easeInOut(duration: 0.12), value: isDragging)
+                    .animation(.easeInOut(duration: 0.25), value: isTransitioning)
                 }
-                .frame(width: 36)
-                .animation(.easeInOut(duration: 0.12), value: isHovering)
-                .animation(.easeInOut(duration: 0.12), value: isDragging)
-            }
-
-            // Device name - use HStack with tap gesture instead of Button to not interfere with drag
-            HStack(spacing: 8) {
-                Text(device.name)
-                    .font(.system(size: 13, weight: .regular))
-                    .strikethrough(isNeverUse, color: .secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundColor(isGrayed || isNeverUse ? .secondary : .primary)
-
-                if let icon = statusIcon {
-                    Image(systemName: icon)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.7))
-                }
-
-                if let lastSeen = lastSeenText {
-                    Text(lastSeen)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.6))
-                }
-
-                if isMuted {
-                    Text("Muted")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.white)
+                
+                // Device name - use HStack with tap gesture instead of Button to not interfere with drag
+                HStack(spacing: 8) {
+                    Text(device.name)
+                        .font(.system(size: 13, weight: .regular))
+                        .strikethrough(isNeverUse, color: .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundColor(isGrayed || isNeverUse ? .secondary : .primary)
+                    
+                    if let icon = statusIcon {
+                        Image(systemName: icon)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.7))
+                    }
+                    
+                    if let lastSeen = lastSeenText {
+                        Text(lastSeen)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.6))
+                    }
+                    
+                    if isMuted {
+                        HStack(spacing: 4) {
+                            Image(systemName: "speaker.slash.fill")
+                                .font(.system(size: 9))
+                            Text("Muted")
+                                .font(.system(size: 9, weight: .semibold))
+                        }
+                        .foregroundColor(.secondary)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.red))
-                }
-
-                Spacer(minLength: 12)
-
-                if isSelected && !isDisconnected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.system(size: 15))
-                        .transition(.scale.combined(with: .opacity))
-                }
-            }
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-
-            // Actions menu - always reserve space to prevent layout shifts
-            ZStack {
-                // Invisible placeholder to reserve space
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 14))
-                    .frame(width: 28, height: 28)
-                    .opacity(0)
-                
-                // Actual menu (shown on hover)
-                if isHovering && !isDragging {
-                    Group {
-                    Menu {
-                    if showCategoryPicker {
-                        Button {
-                            audioManager.setCategory(.speaker, for: device)
-                        } label: {
-                            Label("Move to Speakers", systemImage: "speaker.wave.2.fill")
-                        }
-                        Button {
-                            audioManager.setCategory(.headphone, for: device)
-                        } label: {
-                            Label("Move to Headphones", systemImage: "headphones")
-                        }
-                        Divider()
+                        .background(
+                            Capsule()
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(Capsule().stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+                        )
                     }
-
-                    if isHiddenSection || isIgnored {
-                        Button {
-                            audioManager.unhideDevice(device)
-                        } label: {
-                            Label("Stop Ignoring", systemImage: "eye")
-                        }
-                    } else {
-                        if let onHide {
+                    
+                    Spacer(minLength: 12)
+                }
+                
+                // Actions menu - always reserve space to prevent layout shifts
+                ZStack {
+                    // Invisible placeholder to reserve space
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14))
+                        .frame(width: 28, height: 28)
+                        .opacity(0)
+                    
+                    // Actual menu (shown on hover)
+                    Menu {
+                        if showCategoryPicker {
                             Button {
-                                onHide(device)
+                                audioManager.setCategory(.speaker, for: device)
                             } label: {
-                                let categoryLabel = device.type == .input ? "microphone" :
-                                    (category == .headphone ? "headphone" : "speaker")
-                                Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
+                                Label("Move to Speakers", systemImage: "speaker.wave.2.fill")
                             }
-
-                            if device.type == .output {
+                            Button {
+                                audioManager.setCategory(.headphone, for: device)
+                            } label: {
+                                Label("Move to Headphones", systemImage: "headphones")
+                            }
+                            Divider()
+                        }
+                        
+                        if isHiddenSection || isIgnored {
+                            Button {
+                                audioManager.unhideDevice(device)
+                            } label: {
+                                Label("Stop Ignoring", systemImage: "eye")
+                            }
+                        } else {
+                            if let onHide {
                                 Button {
-                                    audioManager.hideDeviceEntirely(device)
+                                    onHide(device)
                                 } label: {
-                                    Label("Ignore entirely", systemImage: "eye.slash.fill")
+                                    let categoryLabel = device.type == .input ? "microphone" :
+                                    (category == .headphone ? "headphone" : "speaker")
+                                    Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
+                                }
+                                
+                                if device.type == .output {
+                                    Button {
+                                        audioManager.hideDeviceEntirely(device)
+                                    } label: {
+                                        Label("Ignore entirely", systemImage: "eye.slash.fill")
+                                    }
                                 }
                             }
                         }
-                    }
-
-                    if isDisconnected {
-                        Divider()
-                        Button(role: .destructive) {
-                            audioManager.priorityManager.forgetDevice(device.uid)
-                            audioManager.refreshDevices()
-                        } label: {
-                            Label("Forget Device", systemImage: "trash")
-                        }
-                    }
-
-                    if device.isConnected {
-                        Divider()
-                        Button {
-                            audioManager.setNeverUse(device, neverUse: !audioManager.isNeverUse(device))
-                        } label: {
-                            if audioManager.isNeverUse(device) {
-                                Label("Allow Use", systemImage: "checkmark.circle")
-                            } else {
-                                Label("Never Use", systemImage: "nosign")
+                        
+                        if isDisconnected {
+                            Divider()
+                            Button(role: .destructive) {
+                                audioManager.priorityManager.forgetDevice(device.uid)
+                                audioManager.refreshDevices()
+                            } label: {
+                                Label("Forget Device", systemImage: "trash")
                             }
                         }
-                    }
+                        
+                        if device.isConnected {
+                            Divider()
+                            Button {
+                                audioManager.setNeverUse(device, neverUse: !audioManager.isNeverUse(device))
+                            } label: {
+                                if audioManager.isNeverUse(device) {
+                                    Label("Allow Use", systemImage: "checkmark.circle")
+                                } else {
+                                    Label("Never Use", systemImage: "nosign")
+                                }
+                            }
+                        }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Image(systemName: "ellipsis")
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                             .frame(width: 28, height: 28)
                             .contentShape(Rectangle())
                     }
                     .menuStyle(.borderlessButton)
-                    }
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .menuIndicator(.hidden)
+                    .opacity(isHovering && !isDragging ? 1 : 0)
+                    .scaleEffect(isHovering && !isDragging ? 1 : (isTransitioning ? 0.9 : 0.8))
+                    .blur(radius: isTransitioning ? 1 : 0)
+                    .allowsHitTesting(isHovering && !isDragging)
+                }
+                .frame(width: 32)
+                .animation(.easeInOut(duration: 0.12), value: isHovering)
+                .animation(.easeInOut(duration: 0.12), value: isDragging)
+                .animation(.easeInOut(duration: 0.25), value: isTransitioning)
+            }
+            .padding(.leading, 4)
+            .padding(.trailing, 4)
+            .padding(.vertical, 4)
+            .opacity(isDragging ? 0.5 : (isGrayed ? 0.6 : 1.0))
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(
+                        isSelected && !isDisconnected
+                            ? Color(NSColor.controlBackgroundColor).opacity(0.4)
+                            : (isHovering ? Color.primary.opacity(0.1) : Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                isSelected && !isDisconnected
+                                    ? Color.secondary.opacity(0.2)
+                                    : Color.clear,
+                                lineWidth: 1
+                            )
+                    )
+            )
+            // Drop indicator above this row
+            .overlay(alignment: .top) {
+                if isDropTarget {
+                    DropIndicatorLine()
+                        .offset(y: -5)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
-            .frame(width: 32)
-            .animation(.easeInOut(duration: 0.12), value: isHovering)
-        }
-        .padding(.leading, 8)
-        .padding(.trailing, 10)
-        .padding(.vertical, 5)
-        .opacity(isDragging ? 0.5 : (isGrayed ? 0.6 : 1.0))
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected && !isDisconnected ? Color.accentColor.opacity(0.12) : (isHovering ? Color.primary.opacity(0.06) : Color.clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected && !isDisconnected ? Color.accentColor.opacity(0.8) : Color.clear, lineWidth: 1.5)
-        )
-        // Drop indicator above this row
-        .overlay(alignment: .top) {
-            if isDropTarget {
-                DropIndicatorLine()
-                    .offset(y: -5)
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-            }
-        }
-        // Drop indicator below this row (for last position)
-        .overlay(alignment: .bottom) {
-            if isDropTargetBelow {
-                DropIndicatorLine()
-                    .offset(y: 5)
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-            }
-        }
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) {
-                isHovering = hovering
-            }
-        }
-        // Highlight the dragged row with a border instead of moving it
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isDragging ? Color.accentColor : Color.clear, lineWidth: 2)
-        )
-        .scaleEffect(isDragging ? 1.02 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isHovering)
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isDragging)
-        .animation(.easeInOut(duration: 0.1), value: isDropTarget)
-        .animation(.easeInOut(duration: 0.1), value: isDropTargetBelow)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !isDisconnected && audioManager.isCustomMode {
-                onSelect()
-            }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 5)
-                .onChanged { value in
-                    if !isDragging {
-                        onDragStarted()
-                    }
-                    let newTarget = calculateTarget(offset: value.translation.height)
-                    if newTarget != lastReportedTarget {
-                        lastReportedTarget = newTarget
-                        onTargetChanged(newTarget)
-                    }
+            // Drop indicator below this row (for last position)
+            .overlay(alignment: .bottom) {
+                if isDropTargetBelow {
+                    DropIndicatorLine()
+                        .offset(y: 5)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
-                .onEnded { _ in
-                    lastReportedTarget = nil
-                    onDragEnded()
+            }
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.12)) {
+                    isHovering = hovering
                 }
-        )
+            }
+            .onChange(of: isHovering) { _, _ in
+                isTransitioning = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isTransitioning = false
+                }
+            }
+            // Highlight the dragged row with a border instead of moving it
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isDragging ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+            .scaleEffect(isDragging ? 1.02 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: isHovering)
+            .animation(.easeInOut(duration: 0.15), value: isSelected)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isDragging)
+            .animation(.easeInOut(duration: 0.1), value: isDropTarget)
+            .animation(.easeInOut(duration: 0.1), value: isDropTargetBelow)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if !isDisconnected && audioManager.isCustomMode {
+                    onSelect()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 5)
+                    .onChanged { value in
+                        if !isDragging {
+                            onDragStarted()
+                        }
+                        let newTarget = calculateTarget(offset: value.translation.height)
+                        if newTarget != lastReportedTarget {
+                            lastReportedTarget = newTarget
+                            onTargetChanged(newTarget)
+                        }
+                    }
+                    .onEnded { _ in
+                        lastReportedTarget = nil
+                        onDragEnded()
+                    }
+            )
+        } else {
+            // Fallback on earlier versions
+        }
     }
 }
 

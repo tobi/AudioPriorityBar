@@ -14,10 +14,9 @@ struct MenuBarView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color.primary.opacity(0.02))
+            .padding(.vertical, 8)
 
             Divider()
-                .padding(.horizontal, 12)
 
             ScrollView {
                 VStack(spacing: 20) {
@@ -39,7 +38,7 @@ struct MenuBarView: View {
                             onUnhide: { audioManager.unhideDevice($0, category: .speaker) },
                             category: .speaker,
                             showCategoryPicker: true,
-                            isActiveCategory: audioManager.currentMode == .speaker || audioManager.isCustomMode
+                            isActiveCategory: false
                         )
                     }
 
@@ -61,7 +60,7 @@ struct MenuBarView: View {
                             onUnhide: { audioManager.unhideDevice($0, category: .headphone) },
                             category: .headphone,
                             showCategoryPicker: true,
-                            isActiveCategory: audioManager.currentMode == .headphone || audioManager.isCustomMode
+                            isActiveCategory: false
                         )
                     }
 
@@ -76,120 +75,114 @@ struct MenuBarView: View {
                         onHide: { audioManager.hideDevice($0, category: nil) },
                         onUnhide: { audioManager.unhideDevice($0, category: nil) },
                         category: nil,
-                        showCategoryPicker: false
+                        showCategoryPicker: false,
+                        isActiveCategory: false
                     )
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
             }
-            .frame(maxHeight: 420)
+            .frame(minHeight: 280, maxHeight: 480)
+            .padding(.vertical, 8)
+            .background(Color.primary.opacity(0.03))
 
             Divider()
-                .padding(.horizontal, 12)
 
             // Footer
-            HStack(spacing: 16) {
-                // Hidden devices toggle (only in normal mode)
-                if !audioManager.isEditMode {
-                    HiddenDevicesToggleView()
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                }
+            VStack(spacing: 4) {
+                // Standard menu items
+                EditModeToggle()
 
-                Spacer()
-                
-                // Launch at login toggle
                 LaunchAtLoginToggle()
 
-                // Edit mode toggle
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        audioManager.toggleEditMode()
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: audioManager.isEditMode ? "checkmark.circle.fill" : "pencil.circle")
-                            .font(.system(size: 12))
-                        Text(audioManager.isEditMode ? "Done" : "Edit")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(audioManager.isEditMode ? .accentColor : .secondary)
-                }
-                .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.2), value: audioManager.isEditMode)
+                Divider()
 
-                // Quit button
                 Button {
                     NSApplication.shared.terminate(nil)
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary.opacity(0.6))
+                    Text("Quit")
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.plain)
-                .help("Quit")
+                .buttonStyle(MenuItemButtonStyle())
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
             .animation(.easeInOut(duration: 0.2), value: audioManager.isEditMode)
         }
         .frame(width: 340)
     }
 }
 
-struct ModeToggleView: View {
-    @EnvironmentObject var audioManager: AudioManager
+private struct SegmentButton: View {
+    let icon: String
+    let label: String
+    let isSelected: Bool
+    let namespace: Namespace.ID
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .frame(width: 14, height: 14)
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .foregroundColor(isSelected ? .primary : .secondary)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.7))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                        )
+                        .matchedGeometryEffect(id: "segment", in: namespace)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct ModeToggleView: View {
+    @EnvironmentObject var audioManager: AudioManager
+    @Namespace private var segmentAnimation
+
+    var body: some View {
+        HStack(spacing: 0) {
             ForEach(OutputCategory.allCases, id: \.self) { mode in
-                let isSelected = audioManager.currentMode == mode && !audioManager.isCustomMode
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                SegmentButton(
+                    icon: mode.icon,
+                    label: mode.label,
+                    isSelected: !audioManager.isCustomMode && audioManager.currentMode == mode,
+                    namespace: segmentAnimation
+                ) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                         if audioManager.isCustomMode {
                             audioManager.setCustomMode(false)
                         }
                         audioManager.setMode(mode)
                     }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: mode.icon)
-                            .font(.system(size: 11))
-                        Text(mode.label)
-                            .font(.system(size: 12, weight: .medium))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(isSelected ? Color.accentColor : Color.clear)
-                    )
-                    .foregroundColor(isSelected ? .white : .secondary)
                 }
-                .buttonStyle(.plain)
             }
 
-            // Custom mode toggle
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+            SegmentButton(
+                icon: "hand.raised.fill",
+                label: "Manual",
+                isSelected: audioManager.isCustomMode,
+                namespace: segmentAnimation
+            ) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                     audioManager.setCustomMode(!audioManager.isCustomMode)
                 }
-            } label: {
-                Image(systemName: "hand.raised.fill")
-                    .font(.system(size: 12))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(audioManager.isCustomMode ? Color.orange : Color.clear)
-                    )
-                    .foregroundColor(audioManager.isCustomMode ? .white : .secondary)
             }
-            .buttonStyle(.plain)
             .help("Manual mode - disable auto-switching")
         }
         .padding(4)
@@ -197,13 +190,13 @@ struct ModeToggleView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.primary.opacity(0.05))
         )
-        .animation(.easeInOut(duration: 0.2), value: audioManager.currentMode)
-        .animation(.easeInOut(duration: 0.2), value: audioManager.isCustomMode)
     }
 }
 
 struct VolumeSliderView: View {
     @EnvironmentObject var audioManager: AudioManager
+    @State private var isEditing = false
+    @State private var isTransitioning = false
 
     var volumeIcon: String {
         if audioManager.currentMode == .headphone {
@@ -223,18 +216,35 @@ struct VolumeSliderView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: volumeIcon)
-                .font(.system(size: 13))
-                .foregroundColor(.accentColor)
-                .frame(width: 20)
-                .animation(.easeInOut(duration: 0.15), value: volumeIcon)
+            if #available(macOS 14.0, *) {
+                Image(systemName: volumeIcon)
+                    .font(.system(size: 13))
+                    .frame(width: 20, height: 14)
+                    .foregroundColor(isEditing ? .accentColor : .primary)
+                    .scaleEffect(isEditing ? 1.05 : (isTransitioning ? 0.9 : 1))
+                    .blur(radius: isTransitioning ? 1 : 0)
+                    .opacity(isTransitioning ? 0.5 : 1)
+                    .animation(.easeInOut(duration: 0.2), value: isEditing)
+                    .animation(.easeInOut(duration: 0.25), value: isTransitioning)
+                    .onChange(of: isEditing) { _, _ in
+                        isTransitioning = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            isTransitioning = false
+                        }
+                    }
+            } else {
+                // Fallback on earlier versions
+            }
 
             Slider(
                 value: Binding(
                     get: { Double(audioManager.volume) },
                     set: { audioManager.setVolume(Float($0)) }
                 ),
-                in: 0...1
+                in: 0...1,
+                onEditingChanged: { editing in
+                    isEditing = editing
+                }
             )
             .controlSize(.small)
 
@@ -243,6 +253,7 @@ struct VolumeSliderView: View {
                 .foregroundColor(.secondary)
                 .frame(width: 36, alignment: .trailing)
         }
+        .padding(.horizontal, 4)
         .onScrollWheel { delta in
             let newVolume = audioManager.volume + Float(delta * 0.02)
             audioManager.setVolume(max(0, min(1, newVolume)))
@@ -303,17 +314,13 @@ struct DeviceSectionView: View {
     var isActiveCategory: Bool = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .foregroundColor(isActiveCategory ? .accentColor : .secondary)
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.5)
+                .padding(.horizontal, 12)
 
             if devices.isEmpty {
                 Text("No devices")
@@ -429,7 +436,7 @@ struct HiddenDeviceRow: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isHovering ? Color.primary.opacity(0.06) : Color.clear)
+                .fill(isHovering ? Color.primary.opacity(0.1) : Color.clear)
         )
         .animation(.easeInOut(duration: 0.15), value: isHovering)
         .onHover { hovering in
@@ -440,24 +447,75 @@ struct HiddenDeviceRow: View {
     }
 }
 
-struct LaunchAtLoginToggle: View {
-    @StateObject private var launchManager = LaunchAtLoginManager.shared
-    
+struct EditModeToggle: View {
+    @EnvironmentObject var audioManager: AudioManager
+
+    var hiddenCount: Int {
+        audioManager.hiddenInputDevices.count +
+        audioManager.hiddenSpeakerDevices.count +
+        audioManager.hiddenHeadphoneDevices.count
+    }
+
     var body: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                launchManager.isEnabled.toggle()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                audioManager.toggleEditMode()
             }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: launchManager.isEnabled ? "power.circle.fill" : "power.circle")
-                    .font(.system(size: 12))
-                Text("Login")
-                    .font(.system(size: 11, weight: .medium))
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .opacity(audioManager.isEditMode ? 1 : 0)
+                    .frame(width: 14)
+                Text(audioManager.isEditMode ? "Done Editing" : "Edit Devices...")
+                Spacer()
+                if !audioManager.isEditMode && hiddenCount > 0 {
+                    Text("\(hiddenCount) ignored")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
             }
-            .foregroundColor(launchManager.isEnabled ? .accentColor : .secondary)
         }
-        .buttonStyle(.plain)
-        .help(launchManager.isEnabled ? "Disable launch at login" : "Enable launch at login")
+        .buttonStyle(MenuItemButtonStyle())
+    }
+}
+
+struct LaunchAtLoginToggle: View {
+    @StateObject private var launchManager = LaunchAtLoginManager.shared
+
+    var body: some View {
+        Button {
+            launchManager.isEnabled.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .opacity(launchManager.isEnabled ? 1 : 0)
+                    .frame(width: 14)
+                Text("Launch at Login")
+                Spacer()
+            }
+        }
+        .buttonStyle(MenuItemButtonStyle())
+    }
+}
+
+struct MenuItemButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13))
+            .foregroundColor(.primary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isHovering ? Color.primary.opacity(0.1) : Color.clear)
+            )
+            .onHover { hovering in
+                isHovering = hovering
+            }
     }
 }

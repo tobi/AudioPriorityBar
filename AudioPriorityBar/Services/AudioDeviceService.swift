@@ -5,8 +5,10 @@ import AudioToolbox
 class AudioDeviceService {
     var onDevicesChanged: (() -> Void)?
     var onMuteOrVolumeChanged: (() -> Void)?
+    var onDefaultOutputDeviceChanged: (() -> Void)?
 
     private var listenerBlock: AudioObjectPropertyListenerBlock?
+    private var defaultOutputListenerBlock: AudioObjectPropertyListenerBlock?
     private var muteVolumeListenerBlock: AudioObjectPropertyListenerBlock?
     private var monitoredDeviceIds: Set<AudioObjectID> = []
 
@@ -261,6 +263,12 @@ class AudioDeviceService {
             listenerBlock!
         )
 
+        // Use a separate listener for default output device changes
+        // This allows us to detect manual switches via System Preferences / menu bar
+        defaultOutputListenerBlock = { [weak self] _, _ in
+            self?.onDefaultOutputDeviceChanged?()
+        }
+
         var outputDefaultAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -270,7 +278,7 @@ class AudioDeviceService {
             AudioObjectID(kAudioObjectSystemObject),
             &outputDefaultAddress,
             DispatchQueue.main,
-            listenerBlock!
+            defaultOutputListenerBlock!
         )
 
         // Initial setup of mute/volume listeners
@@ -417,17 +425,20 @@ class AudioDeviceService {
             block
         )
 
-        var outputDefaultAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        AudioObjectRemovePropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &outputDefaultAddress,
-            DispatchQueue.main,
-            block
-        )
+        if let outputBlock = defaultOutputListenerBlock {
+            var outputDefaultAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &outputDefaultAddress,
+                DispatchQueue.main,
+                outputBlock
+            )
+            defaultOutputListenerBlock = nil
+        }
 
         listenerBlock = nil
     }

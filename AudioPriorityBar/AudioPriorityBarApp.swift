@@ -158,6 +158,9 @@ class AudioManager: ObservableObject {
         }
     }
 
+    /// Tracks the last output device ID that was set by the app (not externally)
+    private var lastAppSetOutputId: AudioObjectID?
+
     init() {
         currentMode = priorityManager.currentMode
         isCustomMode = priorityManager.isCustomMode
@@ -167,10 +170,13 @@ class AudioManager: ObservableObject {
         refreshMuteStatus()
         setupDeviceChangeListener()
         setupMuteVolumeListener()
+        setupDefaultOutputChangeListener()
         if !isCustomMode {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
         }
+        // Track initial output device
+        lastAppSetOutputId = currentOutputId
     }
 
     private func setupMuteVolumeListener() {
@@ -181,7 +187,54 @@ class AudioManager: ObservableObject {
         }
     }
 
+    private func setupDefaultOutputChangeListener() {
+        deviceService.onDefaultOutputDeviceChanged = { [weak self] in
+            Task { @MainActor in
+                self?.handleDefaultOutputDeviceChange()
+            }
+        }
+    }
+
     private func handleMuteOrVolumeChange() {
+        refreshMuteStatus()
+        refreshVolume()
+    }
+
+    /// Handles when the default output device changes (e.g., via System Preferences or menu bar).
+    /// If the user manually switched to a device in a different category, switch modes to follow.
+    private func handleDefaultOutputDeviceChange() {
+        guard !isCustomMode else { return }
+
+        let newDefaultId = deviceService.getCurrentDefaultDevice(type: .output)
+
+        // If this change was triggered by our own app, ignore it
+        if newDefaultId == lastAppSetOutputId {
+            return
+        }
+
+        // Update our tracked output ID
+        currentOutputId = newDefaultId
+
+        // Find which device was selected
+        guard let newDeviceId = newDefaultId else { return }
+
+        // Check if the new device is in speakers or headphones
+        if speakerDevices.contains(where: { $0.id == newDeviceId }) {
+            // User switched to a speaker - change to speaker mode
+            if currentMode != .speaker {
+                currentMode = .speaker
+                priorityManager.currentMode = .speaker
+                lastAppSetOutputId = newDeviceId
+            }
+        } else if headphoneDevices.contains(where: { $0.id == newDeviceId }) {
+            // User switched to headphones - change to headphone mode
+            if currentMode != .headphone {
+                currentMode = .headphone
+                priorityManager.currentMode = .headphone
+                lastAppSetOutputId = newDeviceId
+            }
+        }
+
         refreshMuteStatus()
         refreshVolume()
     }
@@ -393,6 +446,7 @@ class AudioManager: ObservableObject {
     private func applyOutputDevice(_ device: AudioDevice) {
         deviceService.setDefaultDevice(device.id, type: .output)
         currentOutputId = device.id
+        lastAppSetOutputId = device.id
     }
 
     private func applyHighestPriorityInput() {

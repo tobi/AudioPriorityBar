@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+DEPLOY=false
+for arg in "$@"; do
+  if [ "$arg" = "-deploy" ]; then
+    DEPLOY=true
+  fi
+done
+
 echo "Building AudioPriorityBar..."
 
 xcodebuild -scheme AudioPriorityBar \
@@ -19,3 +26,17 @@ cp -R .build/Build/Products/Release/AudioPriorityBar.app dist/
 
 echo ""
 echo "Build complete: dist/AudioPriorityBar.app"
+
+if [ "$DEPLOY" = true ]; then
+  echo ""
+  echo "Deploying to /Applications..."
+
+  pkill -x AudioPriorityBar 2>/dev/null || true
+
+  rm -rf /Applications/AudioPriorityBar.app
+  cp -R dist/AudioPriorityBar.app /Applications/
+
+  open /Applications/AudioPriorityBar.app
+
+  echo "Deployed and launched: /Applications/AudioPriorityBar.app"
+fi

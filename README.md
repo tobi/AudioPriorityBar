@@ -4,7 +4,7 @@
   <img src="icon.png" width="128" height="128" alt="Audio Priority Bar Icon">
 </p>
 
-A native macOS menu bar app that automatically manages audio device priorities. Set your preferred order for speakers, headphones, and microphones - the app automatically switches to the highest-priority connected device.
+A native macOS menu bar app that intelligently manages your audio devices. Organize speakers, headphones, and microphones by priority, and let the app automatically switch to your preferred device when you plug it in. Perfect for users who frequently switch between multiple audio setups.
 
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
@@ -14,14 +14,28 @@ A native macOS menu bar app that automatically manages audio device priorities. 
 
 ## Features
 
-- **Priority-based auto-switching**: Devices are ranked by priority. When a higher-priority device connects, it automatically becomes active.
-- **Separate speaker/headphone modes**: Output devices are categorized as either speakers or headphones, each with their own priority list.
-- **Manual override**: Enable "Custom" mode (hand icon) to disable auto-switching and select devices freely.
-- **Device memory**: Remembers all devices you've ever connected, even when disconnected. Edit mode shows disconnected devices with "last seen" timestamps.
-- **Per-category ignore**: Hide devices from specific categories without affecting others.
+### Smart Audio Management
+- **Priority-based auto-switching**: Rank your devices by preference. When you connect a higher-priority device, it automatically becomes active - no manual switching needed.
+- **Dual-mode operation**: Separate priority lists for speakers and headphones. Switch modes manually or enable quick-switch for one-click toggling.
+- **Fast switching**: Enable quick-switch mode in preferences to toggle between speakers and headphones with a single left-click on the menu bar icon. Only switches when devices are available in the target mode.
+- **Manual mode**: Toggle "Custom" mode (✋ hand icon) to disable auto-switching and control devices manually.
+- **Persistent device memory**: Remembers every device you've connected, even when unplugged. Maintains priority order and preferences across reconnections.
+
+### Volume & Mute Controls
+- **Integrated volume control**: Adjust output volume via slider, scroll wheel, or system keys.
+- **Smart mute handling**: Click the volume icon to mute/unmute. Adjusting volume automatically unmutes if currently muted.
+- **Visual feedback**: Menu bar icon shows current mode, volume level, mute status, and microphone state.
+
+### Device Organization
 - **Drag-to-reorder**: Reorder devices by dragging or using up/down arrows.
-- **Volume control**: Adjust volume with slider or scroll wheel.
-- **Menu bar integration**: Shows current mode icon and volume percentage.
+- **Per-category customization**: Assign output devices to speaker or headphone categories. Hide devices from specific categories without affecting others.
+- **Device filtering**: Hide devices you don't use or mark them as "never use" to exclude them from auto-switching.
+- **Preferred input pairing**: Assign specific microphones to specific output devices for automatic switching.
+
+### Edit Mode & History
+- **Comprehensive edit mode**: See all devices ever connected, including disconnected ones (shown grayed out).
+- **Timestamp tracking**: View "last seen" timestamps for disconnected devices.
+- **Device management**: Forget old devices you no longer use to keep your lists clean.
 
 ## Installation
 
@@ -50,41 +64,76 @@ Check the [Releases](https://github.com/tobi/AudioPriorityBar/releases) page for
 
 ## Usage
 
-### Modes
+### Operating Modes
 
 | Mode | Icon | Behavior |
 |------|------|----------|
 | **Speakers** | 🔊 | Shows speaker devices, auto-switches to highest priority |
 | **Headphones** | 🎧 | Shows headphone devices, auto-switches to highest priority |
-| **Custom** | ✋ | Shows all devices, no auto-switching |
+| **Custom** | ✋ | Shows all devices, disables auto-switching for manual control |
 
-### Managing Priorities
+### Quick Access (Menu Bar Icon)
 
-- **Click a device**: Moves it to #1 priority (in normal mode) or just selects it (in custom mode)
-- **Drag devices**: Reorder by dragging the handle
-- **Up/Down arrows**: Fine-tune order on hover
+- **Left-click**: Open main menu (default) or toggle speaker/headphone mode (if quick-switch enabled in preferences)
+- **Right-click**: Always opens main menu when quick-switch is enabled
+- **Icon display**: Shows current mode icon, volume level, mute status (🔇), and microphone mute indicator
 
-### Device Actions (hover menu)
+### Volume & Mute
 
-- **Move to Speakers/Headphones**: Change device category
-- **Ignore as [category]**: Hide from current category only
-- **Ignore entirely**: Hide from both speaker and headphone lists
-- **Forget Device**: Remove disconnected device from memory
+- **Volume slider**: Drag to adjust output volume
+- **Scroll wheel**: Hover over volume slider and scroll to adjust
+- **Volume icon**: Click to toggle mute/unmute
+- **Smart unmute**: Adjusting volume when muted automatically unmutes
+
+### Managing Device Priorities
+
+- **Click a device**: Makes it active and moves it to #1 priority (in auto-switch modes) or just selects it (in custom mode)
+- **Drag to reorder**: Grab the handle (≡) and drag devices up/down
+- **Arrow controls**: Hover over a device to reveal up/down arrows for fine-tuning order
+- **Reordering behavior**: In speaker/headphone modes, moving a device to #1 automatically activates it
+
+### Device Actions (Edit Mode Menu)
+
+- **Move to Speakers/Headphones**: Re-categorize output devices
+- **Ignore as [category]**: Hide device from current category only
+- **Ignore entirely**: Hide from both speaker and headphone categories
+- **Never use**: Exclude device from auto-switching but keep it visible
+- **Set preferred input**: Pair a specific microphone with an output device
+- **Forget device**: Remove disconnected device from app memory
 
 ### Edit Mode
 
-Click "Edit" in the footer to:
-- See all devices ever connected (disconnected ones grayed out)
-- Reorder disconnected devices in the priority list
-- View "last seen" timestamps
+Click **Edit** in the footer to access advanced features:
+- View all devices ever connected, including disconnected ones (grayed out with timestamps)
+- Reorder disconnected devices to set their priority for when they reconnect
+- Manage hidden/ignored devices
 - Forget old devices you no longer use
+- Click **Done** to return to normal view
+
+### Preferences
+
+Click the **⚙️ gear icon** in the footer to access preferences:
+
+**Startup**
+- **Launch at Login**: Automatically start Audio Priority Bar when you log in to macOS
+
+**Menu Bar**
+- **Quick Switch Mode**: Enable single-click toggle between speakers/headphones (requires app restart)
+
+**System Audio**
+- **Sync System Sound Effects Output**: Automatically update macOS system sound effects output to match selected device
+
+**Auto-Switching**
+- View information about auto-switching behavior and mode controls
 
 ## How It Works
 
-1. **Device Discovery**: Uses CoreAudio to enumerate audio devices and listen for changes.
-2. **Priority Storage**: Device priorities are stored in UserDefaults, keyed by device UID (stable across reconnects).
-3. **Auto-Switching**: When devices connect/disconnect, the app automatically selects the highest-priority available device for the current mode.
-4. **Categories**: Each output device is assigned to either "speaker" or "headphone" category, with separate priority lists.
+1. **Device Discovery**: Uses CoreAudio to enumerate audio devices and listen for hardware changes in real-time.
+2. **Priority Storage**: Device priorities, categories, and preferences are stored in UserDefaults, keyed by device UID (stable across reconnects).
+3. **Smart Auto-Switching**: When devices connect/disconnect, the app automatically selects the highest-priority available device for the current mode, while avoiding switching loops.
+4. **Category System**: Each output device is assigned to either "speaker" or "headphone" category, each with independent priority lists and visibility settings.
+5. **Mute & Volume Management**: Volume and mute state are managed through CoreAudio's VirtualMainVolume property. The app automatically unmutes when volume is adjusted and prevents fast-switching to unavailable device categories.
+6. **Preferred Input Pairing**: Output devices can be paired with specific input devices for automatic microphone switching based on audio output.
 
 ## Project Structure
 

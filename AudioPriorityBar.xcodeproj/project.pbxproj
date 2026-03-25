@@ -11,12 +11,17 @@
 		A10000000000000000000002 /* AudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AudioDevice.swift */; };
 		A10000000000000000000003 /* AudioDeviceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* AudioDeviceService.swift */; };
 		A10000000000000000000004 /* PriorityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* PriorityManager.swift */; };
+		A10000000000000000000011 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* MenuBarController.swift */; };
 		A10000000000000000000005 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* MenuBarView.swift */; };
 		A10000000000000000000006 /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* DeviceListView.swift */; };
 		A10000000000000000000007 /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* LaunchAtLoginManager.swift */; };
 		A10000000000000000000009 /* Headphones.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* Headphones.swift */; };
 		A10000000000000000000010 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* CoreAudio.framework */; };
 		A10000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* Assets.xcassets */; };
+		4DD6D82E5CF6D899F9B4F327 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 622640DCAA11DD5022FC5DBF /* AppInfo.swift */; };
+		5EACF86E108BAB90FAC19892 /* PreferencesWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE42A89AB153F7394DACCC1B /* PreferencesWindowController.swift */; };
+		ED800EC86195D082D84E8604 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA3538E8C4D0E18A321A5344 /* PreferencesView.swift */; };
+		A10000000000000000000012 /* ClickActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* ClickActions.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +29,7 @@
 		A20000000000000000000002 /* AudioDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevice.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* AudioDeviceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceService.swift; sourceTree = "<group>"; };
 		A20000000000000000000004 /* PriorityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriorityManager.swift; sourceTree = "<group>"; };
+		A20000000000000000000011 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		A20000000000000000000006 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -32,6 +38,10 @@
 		A20000000000000000000010 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		A20000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A30000000000000000000001 /* AudioPriorityBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioPriorityBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		622640DCAA11DD5022FC5DBF /* AppInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfo.swift; sourceTree = "<group>"; };
+		DE42A89AB153F7394DACCC1B /* PreferencesWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesWindowController.swift; sourceTree = "<group>"; };
+		BA3538E8C4D0E18A321A5344 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		A20000000000000000000012 /* ClickActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickActions.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,6 +83,8 @@
 			children = (
 				A20000000000000000000002 /* AudioDevice.swift */,
 				A20000000000000000000009 /* Headphones.swift */,
+				622640DCAA11DD5022FC5DBF /* AppInfo.swift */,
+				A20000000000000000000012 /* ClickActions.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -83,6 +95,8 @@
 				A20000000000000000000003 /* AudioDeviceService.swift */,
 				A20000000000000000000004 /* PriorityManager.swift */,
 				A20000000000000000000008 /* LaunchAtLoginManager.swift */,
+				DE42A89AB153F7394DACCC1B /* PreferencesWindowController.swift */,
+				A20000000000000000000011 /* MenuBarController.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -92,6 +106,7 @@
 			children = (
 				A20000000000000000000005 /* MenuBarView.swift */,
 				A20000000000000000000006 /* DeviceListView.swift */,
+				BA3538E8C4D0E18A321A5344 /* PreferencesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -184,11 +199,16 @@
 				A10000000000000000000001 /* AudioPriorityBarApp.swift in Sources */,
 				A10000000000000000000002 /* AudioDevice.swift in Sources */,
 				A10000000000000000000009 /* Headphones.swift in Sources */,
+				4DD6D82E5CF6D899F9B4F327 /* AppInfo.swift in Sources */,
+				A10000000000000000000012 /* ClickActions.swift in Sources */,
 				A10000000000000000000003 /* AudioDeviceService.swift in Sources */,
 				A10000000000000000000004 /* PriorityManager.swift in Sources */,
+				5EACF86E108BAB90FAC19892 /* PreferencesWindowController.swift in Sources */,
 				A10000000000000000000005 /* MenuBarView.swift in Sources */,
 				A10000000000000000000006 /* DeviceListView.swift in Sources */,
+				ED800EC86195D082D84E8604 /* PreferencesView.swift in Sources */,
 				A10000000000000000000007 /* LaunchAtLoginManager.swift in Sources */,
+				A10000000000000000000011 /* MenuBarController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

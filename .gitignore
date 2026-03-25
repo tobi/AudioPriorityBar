@@ -69,3 +69,4 @@ Index/
 # xcode-build-server files
 buildServer.json
 .compile
+.claude

@@ -1,18 +1,33 @@
 import SwiftUI
 import CoreAudio
+import OSLog
 
 @main
 struct AudioPriorityBarApp: App {
-    @StateObject private var audioManager = AudioManager()
-    
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarView()
-                .environmentObject(audioManager)
-        } label: {
-            Image(systemName: "speaker.wave.2.fill")
+        // Return an empty scene - menu bar is handled by AppDelegate
+        Settings {
+            EmptyView()
         }
-        .menuBarExtraStyle(.window)
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var audioManager: AudioManager!
+    var menuBarController: MenuBarController?
+
+    @MainActor
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Hide the app from the Dock
+        NSApp.setActivationPolicy(.accessory)
+
+        // Initialize audio manager
+        audioManager = AudioManager()
+
+        // Setup menu bar controller
+        menuBarController = MenuBarController(audioManager: audioManager)
     }
 }
 
@@ -92,6 +107,12 @@ class AudioManager: ObservableObject {
     private var micFlashTimer: Timer?
     let priorityManager = PriorityManager()
     private var connectedDeviceUIDs: Set<String> = []
+    private var volumeSetTask: Task<Void, Never>?
+
+    private let logger = Logger(subsystem: "com.audioprioritybar", category: "AudioManager")
+    private var handleDeviceChangeCount = 0
+    private var applyInputCount = 0
+    private var applyOutputCount = 0
 
     var menuBarIcon: String {
         currentMode.icon
@@ -148,7 +169,40 @@ class AudioManager: ObservableObject {
 
     func setVolume(_ newVolume: Float) {
         volume = newVolume
+
+        // Suppress system-callback volume refresh while the user is actively controlling volume.
+        // Without this, the CoreAudio listener fires handleMuteOrVolumeChange → refreshVolume()
+        // which reads a lagging hardware value and snaps the UI back, causing jitter.
+        volumeSetTask?.cancel()
+        volumeSetTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 100_000_000) // 100ms debounce
+                self.volumeSetTask = nil
+            } catch {
+                // Cancelled because setVolume was called again — keep suppressing
+            }
+        }
+
         deviceService.setOutputVolume(newVolume)
+
+        // Unmute the device if it's muted and volume is being changed
+        if let outputId = currentOutputId, isActiveOutputMuted {
+            deviceService.setDeviceMuted(outputId, type: .output, muted: false)
+            // Refresh mute status immediately
+            Task { @MainActor in
+                self.refreshMuteStatus()
+            }
+        }
+    }
+
+    func toggleOutputMute() {
+        guard let outputId = currentOutputId else { return }
+        let newMuteState = !isActiveOutputMuted
+        deviceService.setDeviceMuted(outputId, type: .output, muted: newMuteState)
+        // Refresh mute status immediately
+        Task { @MainActor in
+            self.refreshMuteStatus()
+        }
     }
 
     var activeOutputDevices: [AudioDevice] {
@@ -183,7 +237,10 @@ class AudioManager: ObservableObject {
 
     private func handleMuteOrVolumeChange() {
         refreshMuteStatus()
-        refreshVolume()
+        // Only sync volume from the system when the user isn't actively setting it
+        if volumeSetTask == nil {
+            refreshVolume()
+        }
     }
 
     func refreshDevices() {
@@ -264,9 +321,20 @@ class AudioManager: ObservableObject {
         }
     }
 
-    func toggleMode() {
+    /// Returns true if the toggle succeeded, false if there was nothing to switch to.
+    @discardableResult
+    func toggleMode() -> Bool {
         let newMode: OutputCategory = currentMode == .speaker ? .headphone : .speaker
-        setMode(newMode)
+
+        // Check if target mode has any connected devices
+        let targetDevices = newMode == .speaker ? speakerDevices : headphoneDevices
+        let hasConnectedDevices = targetDevices.contains { $0.isConnected }
+
+        if hasConnectedDevices {
+            setMode(newMode)
+            return true
+        }
+        return false
     }
 
     func setCustomMode(_ enabled: Bool) {
@@ -350,6 +418,18 @@ class AudioManager: ObservableObject {
         }
     }
 
+    func setPreferredInput(_ inputDevice: AudioDevice, forOutput outputUID: String) {
+        priorityManager.setPreferredInput(inputDevice.uid, forOutput: outputUID)
+    }
+
+    func clearPreferredInput(forOutput outputUID: String) {
+        priorityManager.clearPreferredInput(forOutput: outputUID)
+    }
+
+    func getPreferredInputUID(forOutput outputUID: String) -> String? {
+        priorityManager.getPreferredInput(forOutput: outputUID)
+    }
+
     func moveInputDevice(from source: IndexSet, to destination: Int) {
         inputDevices.move(fromOffsets: source, toOffset: destination)
         priorityManager.savePriorities(inputDevices, type: .input)
@@ -386,13 +466,44 @@ class AudioManager: ObservableObject {
     }
 
     private func applyInputDevice(_ device: AudioDevice) {
+        applyInputCount += 1
+        logger.debug("🎤 applyInputDevice #\(self.applyInputCount) - device: \(device.name) (id: \(device.id)), current: \(String(describing: self.currentInputId))")
+
+        guard currentInputId != device.id else {
+            logger.trace("  → Skipping: already current device")
+            return
+        }
+
         deviceService.setDefaultDevice(device.id, type: .input)
         currentInputId = device.id
+        logger.debug("  ✅ Input device set")
     }
 
     private func applyOutputDevice(_ device: AudioDevice) {
-        deviceService.setDefaultDevice(device.id, type: .output)
+        applyOutputCount += 1
+        logger.debug("🔊 applyOutputDevice #\(self.applyOutputCount) - device: \(device.name) (id: \(device.id)), current: \(String(describing: self.currentOutputId))")
+
+        guard currentOutputId != device.id else {
+            logger.trace("  → Skipping: already current device")
+            // Still check for preferred input even if output didn't change
+            if let preferredInputUID = priorityManager.getPreferredInput(forOutput: device.uid),
+               let preferredInput = inputDevices.first(where: { $0.uid == preferredInputUID && $0.isConnected && !priorityManager.isNeverUse($0) }) {
+                logger.debug("  → Applying preferred input for this output")
+                applyInputDevice(preferredInput)
+            }
+            return
+        }
+
+        deviceService.setDefaultDevice(device.id, type: .output, syncSystemOutput: priorityManager.syncSystemOutput)
         currentOutputId = device.id
+        logger.debug("  ✅ Output device set")
+
+        // Check if there's a preferred input for this output device
+        if let preferredInputUID = priorityManager.getPreferredInput(forOutput: device.uid),
+           let preferredInput = inputDevices.first(where: { $0.uid == preferredInputUID && $0.isConnected && !priorityManager.isNeverUse($0) }) {
+            logger.debug("  → Applying preferred input for this output")
+            applyInputDevice(preferredInput)
+        }
     }
 
     private func applyHighestPriorityInput() {
@@ -410,29 +521,43 @@ class AudioManager: ObservableObject {
     }
 
     private func setupDeviceChangeListener() {
-        deviceService.onDevicesChanged = { [weak self] in
+        deviceService.onDevicesChanged = { [weak self] isDeviceListChange in
             Task { @MainActor in
-                self?.handleDeviceChange()
+                self?.handleDeviceChange(isDeviceListChange: isDeviceListChange)
             }
         }
         deviceService.startListening()
     }
 
-    private func handleDeviceChange() {
+    private func handleDeviceChange(isDeviceListChange: Bool) {
+        handleDeviceChangeCount += 1
+        logger.debug("⚡️ handleDeviceChange #\(self.handleDeviceChangeCount) triggered - deviceListChange: \(isDeviceListChange)")
+
         let oldConnectedUIDs = previousConnectedUIDs
         refreshDevices()
         refreshMuteStatus()
-        
+
         // Detect newly connected devices
         let newlyConnectedUIDs = connectedDeviceUIDs.subtracting(oldConnectedUIDs)
         previousConnectedUIDs = connectedDeviceUIDs
-        
-        if !isCustomMode {
+
+        logger.debug("  → Newly connected devices: \(newlyConnectedUIDs.count), custom mode: \(self.isCustomMode)")
+
+        if !isCustomMode && isDeviceListChange {
+            // Only apply priorities when devices are added/removed, NOT when just switching
+            logger.debug("  → Device list changed - applying highest priority devices")
             // Auto-switch mode only when a new headphone connects or all headphones disconnect
             autoSwitchModeIfNeeded(newlyConnectedUIDs: newlyConnectedUIDs)
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
+        } else if !isCustomMode {
+            logger.debug("  → Default device switched - NOT reapplying priorities (prevents loop)")
+            // Just update the UI, don't reapply priorities - this prevents the loop!
+        } else {
+            logger.debug("  → Custom mode enabled - not applying priorities")
         }
+
+        logger.debug("  ✅ handleDeviceChange complete")
     }
     
     /// Automatically switches between headphone and speaker mode based on device connections.

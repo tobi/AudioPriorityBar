@@ -96,9 +96,17 @@ struct MenuBarView: View {
                 }
 
                 Spacer()
-                
-                // Launch at login toggle
-                LaunchAtLoginToggle()
+
+                // Settings button
+                Button {
+                    PreferencesWindowController.shared.show(audioManager: audioManager)
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .help("Preferences")
 
                 // Edit mode toggle
                 Button {
@@ -206,7 +214,9 @@ struct VolumeSliderView: View {
     @EnvironmentObject var audioManager: AudioManager
 
     var volumeIcon: String {
-        if audioManager.currentMode == .headphone {
+        if audioManager.isActiveOutputMuted {
+            return "speaker.slash.fill"
+        } else if audioManager.currentMode == .headphone {
             return "headphones"
         } else {
             if audioManager.volume <= 0 {
@@ -223,11 +233,17 @@ struct VolumeSliderView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: volumeIcon)
-                .font(.system(size: 13))
-                .foregroundColor(.accentColor)
-                .frame(width: 20)
-                .animation(.easeInOut(duration: 0.15), value: volumeIcon)
+            Button {
+                audioManager.toggleOutputMute()
+            } label: {
+                Image(systemName: volumeIcon)
+                    .font(.system(size: 13))
+                    .foregroundColor(.accentColor)
+                    .frame(width: 20)
+                    .animation(.easeInOut(duration: 0.15), value: volumeIcon)
+            }
+            .buttonStyle(.plain)
+            .help(audioManager.isActiveOutputMuted ? "Unmute" : "Mute")
 
             Slider(
                 value: Binding(

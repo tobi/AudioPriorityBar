@@ -42,6 +42,9 @@ class PriorityManager {
     private let customModeKey = "customMode"
     private let hiddenDevicesKey = "hiddenDevices"
     private let knownDevicesKey = "knownDevices"
+    private let quickSwitchKey = "quickSwitchEnabled"
+    private let syncSystemOutputKey = "syncSystemOutput"
+    private let clickActionsKey = "clickActionsConfig"
 
     // MARK: - Known Devices (Persistent Memory)
 
@@ -101,6 +104,62 @@ class PriorityManager {
         set { defaults.set(newValue, forKey: customModeKey) }
     }
 
+    var isQuickSwitchEnabled: Bool {
+        get { defaults.bool(forKey: quickSwitchKey) }
+        set { defaults.set(newValue, forKey: quickSwitchKey) }
+    }
+
+    var syncSystemOutput: Bool {
+        get {
+            // Default to true if not set
+            if defaults.object(forKey: syncSystemOutputKey) == nil {
+                return true
+            }
+            return defaults.bool(forKey: syncSystemOutputKey)
+        }
+        set { defaults.set(newValue, forKey: syncSystemOutputKey) }
+    }
+
+    var clickActionsConfig: ClickActionsConfig {
+        get {
+            // Try to load from UserDefaults
+            if let data = defaults.data(forKey: clickActionsKey),
+               let config = try? JSONDecoder().decode(ClickActionsConfig.self, from: data) {
+                return config
+            }
+
+            // Migration: Check if old isQuickSwitchEnabled setting exists
+            if defaults.object(forKey: quickSwitchKey) != nil {
+                let wasQuickSwitchEnabled = defaults.bool(forKey: quickSwitchKey)
+                if wasQuickSwitchEnabled {
+                    // Old quick switch mode: left=toggle, right=menu
+                    return ClickActionsConfig(
+                        leftClick: .toggle,
+                        rightClick: .menu,
+                        longLeftClick: .noAction,
+                        longRightClick: .noAction
+                    )
+                } else {
+                    // Old normal mode: left=menu, right=menu
+                    return ClickActionsConfig(
+                        leftClick: .menu,
+                        rightClick: .menu,
+                        longLeftClick: .noAction,
+                        longRightClick: .noAction
+                    )
+                }
+            }
+
+            // New users: return default
+            return .default
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                defaults.set(data, forKey: clickActionsKey)
+            }
+        }
+    }
+
     // MARK: - Device Categories
 
     func getCategory(for device: AudioDevice) -> OutputCategory {
@@ -147,6 +206,30 @@ class PriorityManager {
     private let hiddenMicsKey = "hiddenMics"
     private let hiddenSpeakersKey = "hiddenSpeakers"
     private let hiddenHeadphonesKey = "hiddenHeadphones"
+
+    // MARK: - Preferred Inputs for Outputs
+
+    private let preferredInputsKey = "preferredInputsForOutputs"
+
+    /// Get the preferred input device UID for a given output device
+    func getPreferredInput(forOutput outputUID: String) -> String? {
+        let mappings = defaults.dictionary(forKey: preferredInputsKey) as? [String: String] ?? [:]
+        return mappings[outputUID]
+    }
+
+    /// Set a preferred input device for a given output device
+    func setPreferredInput(_ inputUID: String, forOutput outputUID: String) {
+        var mappings = defaults.dictionary(forKey: preferredInputsKey) as? [String: String] ?? [:]
+        mappings[outputUID] = inputUID
+        defaults.set(mappings, forKey: preferredInputsKey)
+    }
+
+    /// Clear the preferred input for a given output device
+    func clearPreferredInput(forOutput outputUID: String) {
+        var mappings = defaults.dictionary(forKey: preferredInputsKey) as? [String: String] ?? [:]
+        mappings.removeValue(forKey: outputUID)
+        defaults.set(mappings, forKey: preferredInputsKey)
+    }
 
     func isHidden(_ device: AudioDevice) -> Bool {
         let key = hiddenKey(for: device)

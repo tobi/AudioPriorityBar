@@ -281,6 +281,26 @@ struct DraggableDeviceRow: View {
                         }
                     }
 
+                    // Prefer for current output (input devices only)
+                    if device.type == .input && device.isConnected, let currentOutputId = audioManager.currentOutputId,
+                       let currentOutput = (audioManager.speakerDevices + audioManager.headphoneDevices).first(where: { $0.id == currentOutputId }) {
+                        Divider()
+                        let isPreferred = audioManager.getPreferredInputUID(forOutput: currentOutput.uid) == device.uid
+                        Button {
+                            if isPreferred {
+                                audioManager.clearPreferredInput(forOutput: currentOutput.uid)
+                            } else {
+                                audioManager.setPreferredInput(device, forOutput: currentOutput.uid)
+                            }
+                        } label: {
+                            if isPreferred {
+                                Label("Clear preferred for \(currentOutput.name)", systemImage: "star.slash")
+                            } else {
+                                Label("Prefer for \(currentOutput.name)", systemImage: "star")
+                            }
+                        }
+                    }
+
                     if isDisconnected {
                         Divider()
                         Button(role: .destructive) {

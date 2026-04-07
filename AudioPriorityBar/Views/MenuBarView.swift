@@ -132,6 +132,7 @@ struct MenuBarView: View {
             .padding(.vertical, 10)
             .animation(.easeInOut(duration: 0.2), value: audioManager.isEditMode)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(width: 340)
     }
 }

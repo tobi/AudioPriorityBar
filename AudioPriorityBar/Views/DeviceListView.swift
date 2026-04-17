@@ -21,7 +21,7 @@ struct DeviceListView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
+            ForEach(Array(devices.enumerated()), id: \.element) { index, device in
                 DraggableDeviceRow(
                     device: device,
                     index: index,

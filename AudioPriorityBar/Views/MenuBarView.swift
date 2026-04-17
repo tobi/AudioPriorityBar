@@ -19,8 +19,7 @@ struct MenuBarView: View {
             Divider()
                 .padding(.horizontal, 12)
 
-            ScrollView {
-                VStack(spacing: 20) {
+            VStack(spacing: 20) {
                     // Speakers (show in speaker mode or custom mode)
                     if audioManager.currentMode == .speaker || audioManager.isCustomMode {
                         DeviceSectionView(
@@ -78,11 +77,9 @@ struct MenuBarView: View {
                         category: nil,
                         showCategoryPicker: false
                     )
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
             }
-            .frame(maxHeight: 420)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
 
             Divider()
                 .padding(.horizontal, 12)
@@ -372,7 +369,7 @@ struct HiddenDevicesToggleView: View {
             .buttonStyle(.plain)
             .popover(isPresented: $isExpanded, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(allHiddenDevices, id: \.id) { device in
+                    ForEach(allHiddenDevices, id: \.self) { device in
                         HiddenDeviceRow(device: device)
                     }
                 }

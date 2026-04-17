@@ -179,10 +179,21 @@ class PriorityManager {
     }
 
     func unhideDevice(_ device: AudioDevice) {
-        let key = hiddenKey(for: device)
-        var hidden = defaults.array(forKey: key) as? [String] ?? []
-        hidden.removeAll { $0 == device.uid }
-        defaults.set(hidden, forKey: key)
+        // For outputs, remove from BOTH hidden category lists so the device
+        // becomes visible regardless of which mode the user is currently in.
+        // Otherwise clicking "unhide" in the ignored popover can silently
+        // land the device in a category whose section is not currently shown.
+        let keys: [String]
+        if device.type == .input {
+            keys = [hiddenMicsKey]
+        } else {
+            keys = [hiddenSpeakersKey, hiddenHeadphonesKey]
+        }
+        for key in keys {
+            var hidden = defaults.array(forKey: key) as? [String] ?? []
+            hidden.removeAll { $0 == device.uid }
+            defaults.set(hidden, forKey: key)
+        }
     }
 
     func unhideDevice(_ device: AudioDevice, fromCategory category: OutputCategory) {

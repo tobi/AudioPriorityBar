@@ -28,6 +28,21 @@ A native macOS menu bar app that automatically manages audio device priorities. 
 ### Requirements
 - macOS 13.0 (Ventura) or later
 
+### Homebrew Tap
+
+Install from this repository's Homebrew tap:
+
+```bash
+brew tap tobi/audioprioritybar https://github.com/tobi/AudioPriorityBar
+brew install --cask tobi/audioprioritybar/audioprioritybar
+```
+
+This uses the project-owned tap instead of the official Homebrew Cask repository.
+The install is still a Homebrew cask because Audio Priority Bar is a macOS app bundle. Since releases are unsigned, macOS may ask you to approve the app the first time you open it.
+
+### Download Release
+Check the [Releases](https://github.com/tobi/AudioPriorityBar/releases) page for pre-built binaries.
+
 ### Build from Source
 
 1. Clone the repository:
@@ -44,9 +59,6 @@ A native macOS menu bar app that automatically manages audio device priorities. 
 3. The app will be at `dist/AudioPriorityBar.app`
 
 Or open `AudioPriorityBar.xcodeproj` in Xcode and build with ⌘R.
-
-### Download Release
-Check the [Releases](https://github.com/tobi/AudioPriorityBar/releases) page for pre-built binaries.
 
 ## Usage
 

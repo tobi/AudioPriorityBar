@@ -9,7 +9,9 @@ struct MenuBarView: View {
         VStack(spacing: 0) {
             // Header with mode toggle and volume
             VStack(spacing: 14) {
-                ModeToggleView()
+                if audioManager.isAnyTabVisible {
+                    ModeToggleView()
+                }
                 VolumeSliderView()
             }
             .padding(.horizontal, 16)
@@ -21,63 +23,84 @@ struct MenuBarView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-                    // Speakers (show in speaker mode or custom mode)
-                    if audioManager.currentMode == .speaker || audioManager.isCustomMode {
+                    // Combined output list (Auto mode) — single list, no category split
+                    if audioManager.currentMode == .combined && !audioManager.isCustomMode {
                         DeviceSectionView(
-                            title: "Speakers",
-                            icon: "speaker.wave.2.fill",
-                            devices: audioManager.speakerDevices,
+                            title: "Outputs",
+                            icon: "rectangle.stack.fill",
+                            devices: audioManager.combinedDevices,
                             currentDeviceId: audioManager.currentOutputId,
-                            onMove: audioManager.moveSpeakerDevice,
+                            onMove: audioManager.moveCombinedDevice,
                             onSelect: { device in
-                                if !audioManager.isCustomMode {
-                                    audioManager.setMode(.speaker)
-                                }
                                 audioManager.setOutputDevice(device)
                             },
-                            onHide: { audioManager.hideDevice($0, category: .speaker) },
-                            onUnhide: { audioManager.unhideDevice($0, category: .speaker) },
-                            category: .speaker,
+                            onHide: nil,
+                            onUnhide: nil,
+                            category: .combined,
                             showCategoryPicker: true,
-                            isActiveCategory: audioManager.currentMode == .speaker || audioManager.isCustomMode
+                            isActiveCategory: true
                         )
+                    } else {
+                        // Speakers (show in speaker mode or custom mode)
+                        if audioManager.currentMode == .speaker || audioManager.isCustomMode {
+                            DeviceSectionView(
+                                title: "Speakers",
+                                icon: "speaker.wave.2.fill",
+                                devices: audioManager.speakerDevices,
+                                currentDeviceId: audioManager.currentOutputId,
+                                onMove: audioManager.moveSpeakerDevice,
+                                onSelect: { device in
+                                    if !audioManager.isCustomMode {
+                                        audioManager.setMode(.speaker)
+                                    }
+                                    audioManager.setOutputDevice(device)
+                                },
+                                onHide: { audioManager.hideDevice($0, category: .speaker) },
+                                onUnhide: { audioManager.unhideDevice($0, category: .speaker) },
+                                category: .speaker,
+                                showCategoryPicker: true,
+                                isActiveCategory: audioManager.currentMode == .speaker || audioManager.isCustomMode
+                            )
+                        }
+
+                        // Headphones (show in headphone mode or custom mode)
+                        if audioManager.currentMode == .headphone || audioManager.isCustomMode {
+                            DeviceSectionView(
+                                title: "Headphones",
+                                icon: "headphones",
+                                devices: audioManager.headphoneDevices,
+                                currentDeviceId: audioManager.currentOutputId,
+                                onMove: audioManager.moveHeadphoneDevice,
+                                onSelect: { device in
+                                    if !audioManager.isCustomMode {
+                                        audioManager.setMode(.headphone)
+                                    }
+                                    audioManager.setOutputDevice(device)
+                                },
+                                onHide: { audioManager.hideDevice($0, category: .headphone) },
+                                onUnhide: { audioManager.unhideDevice($0, category: .headphone) },
+                                category: .headphone,
+                                showCategoryPicker: true,
+                                isActiveCategory: audioManager.currentMode == .headphone || audioManager.isCustomMode
+                            )
+                        }
                     }
 
-                    // Headphones (show in headphone mode or custom mode)
-                    if audioManager.currentMode == .headphone || audioManager.isCustomMode {
+                    // Microphones
+                    if audioManager.showMicrophones {
                         DeviceSectionView(
-                            title: "Headphones",
-                            icon: "headphones",
-                            devices: audioManager.headphoneDevices,
-                            currentDeviceId: audioManager.currentOutputId,
-                            onMove: audioManager.moveHeadphoneDevice,
-                            onSelect: { device in
-                                if !audioManager.isCustomMode {
-                                    audioManager.setMode(.headphone)
-                                }
-                                audioManager.setOutputDevice(device)
-                            },
-                            onHide: { audioManager.hideDevice($0, category: .headphone) },
-                            onUnhide: { audioManager.unhideDevice($0, category: .headphone) },
-                            category: .headphone,
-                            showCategoryPicker: true,
-                            isActiveCategory: audioManager.currentMode == .headphone || audioManager.isCustomMode
+                            title: "Microphones",
+                            icon: "mic.fill",
+                            devices: audioManager.inputDevices,
+                            currentDeviceId: audioManager.currentInputId,
+                            onMove: audioManager.moveInputDevice,
+                            onSelect: audioManager.setInputDevice,
+                            onHide: { audioManager.hideDevice($0, category: nil) },
+                            onUnhide: { audioManager.unhideDevice($0, category: nil) },
+                            category: nil,
+                            showCategoryPicker: false
                         )
                     }
-
-                    // Microphones (always shown, at the bottom)
-                    DeviceSectionView(
-                        title: "Microphones",
-                        icon: "mic.fill",
-                        devices: audioManager.inputDevices,
-                        currentDeviceId: audioManager.currentInputId,
-                        onMove: audioManager.moveInputDevice,
-                        onSelect: audioManager.setInputDevice,
-                        onHide: { audioManager.hideDevice($0, category: nil) },
-                        onUnhide: { audioManager.unhideDevice($0, category: nil) },
-                        category: nil,
-                        showCategoryPicker: false
-                    )
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -96,7 +119,10 @@ struct MenuBarView: View {
                 }
 
                 Spacer()
-                
+
+                // Settings popover
+                SettingsPopoverButton()
+
                 // Launch at login toggle
                 LaunchAtLoginToggle()
 
@@ -115,6 +141,7 @@ struct MenuBarView: View {
                     .foregroundColor(audioManager.isEditMode ? .accentColor : .secondary)
                 }
                 .buttonStyle(.plain)
+                .help(audioManager.isEditMode ? "Exit edit mode" : "Edit priority order — includes disconnected devices")
                 .animation(.easeInOut(duration: 0.2), value: audioManager.isEditMode)
 
                 // Quit button
@@ -133,72 +160,132 @@ struct MenuBarView: View {
             .animation(.easeInOut(duration: 0.2), value: audioManager.isEditMode)
         }
         .frame(width: 340)
+        .frame(maxHeight: 560)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
 struct ModeToggleView: View {
     @EnvironmentObject var audioManager: AudioManager
 
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(OutputCategory.allCases, id: \.self) { mode in
-                let isSelected = audioManager.currentMode == mode && !audioManager.isCustomMode
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if audioManager.isCustomMode {
-                            audioManager.setCustomMode(false)
-                        }
-                        audioManager.setMode(mode)
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: mode.icon)
-                            .font(.system(size: 11))
-                        Text(mode.label)
-                            .font(.system(size: 12, weight: .medium))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(isSelected ? Color.accentColor : Color.clear)
-                    )
-                    .foregroundColor(isSelected ? .white : .secondary)
-                }
-                .buttonStyle(.plain)
-            }
+    /// Wrap to 2 rows when the combined button count would overflow the
+    /// 340pt popup width — empirically that happens at 4 buttons.
+    private var useTwoRows: Bool {
+        let modeCount = audioManager.visibleModeTabs.count
+        let manualCount = audioManager.showManualTab ? 1 : 0
+        return modeCount + manualCount >= 4
+    }
 
-            // Custom mode toggle
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    audioManager.setCustomMode(!audioManager.isCustomMode)
+    var body: some View {
+        VStack(spacing: 6) {
+            VStack(spacing: 4) {
+                if !audioManager.visibleModeTabs.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(audioManager.visibleModeTabs, id: \.self) { mode in
+                            modeButton(mode)
+                        }
+                        if audioManager.showManualTab && !useTwoRows {
+                            dividerLine
+                            manualButton
+                        }
+                    }
                 }
-            } label: {
-                Image(systemName: "hand.raised.fill")
-                    .font(.system(size: 12))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(audioManager.isCustomMode ? Color.orange : Color.clear)
-                    )
-                    .foregroundColor(audioManager.isCustomMode ? .white : .secondary)
+                if audioManager.showManualTab && (useTwoRows || audioManager.visibleModeTabs.isEmpty) {
+                    HStack(spacing: 4) {
+                        manualButton
+                    }
+                }
             }
-            .buttonStyle(.plain)
-            .help("Manual mode - disable auto-switching")
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.primary.opacity(0.05))
+            )
+
+            if audioManager.isCustomMode {
+                Text("Manual mode — priority order is ignored")
+                    .font(.system(size: 10))
+                    .foregroundColor(.orange)
+                    .transition(.opacity)
+            }
         }
-        .padding(4)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.primary.opacity(0.05))
-        )
         .animation(.easeInOut(duration: 0.2), value: audioManager.currentMode)
         .animation(.easeInOut(duration: 0.2), value: audioManager.isCustomMode)
+    }
+
+    private func modeButton(_ mode: OutputCategory) -> some View {
+        let isSelected = audioManager.currentMode == mode && !audioManager.isCustomMode
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if audioManager.isCustomMode {
+                    audioManager.setCustomMode(false)
+                }
+                audioManager.setMode(mode)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 11))
+                Text(mode.label)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            )
+            .foregroundColor(isSelected ? .white : .secondary)
+        }
+        .buttonStyle(.plain)
+        .help(modeHelp(mode))
+    }
+
+    private var manualButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                audioManager.setCustomMode(!audioManager.isCustomMode)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 11))
+                Text("Manual")
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(audioManager.isCustomMode ? Color.orange : Color.clear)
+            )
+            .foregroundColor(audioManager.isCustomMode ? .white : .secondary)
+        }
+        .buttonStyle(.plain)
+        .help("Manual mode — disable auto-switching. Pick devices yourself; the app won't override your choice.")
+    }
+
+    private var dividerLine: some View {
+        Rectangle()
+            .fill(Color.secondary.opacity(0.25))
+            .frame(width: 1, height: 18)
+            .padding(.horizontal, 2)
+    }
+
+    private func modeHelp(_ mode: OutputCategory) -> String {
+        switch mode {
+        case .speaker: return "Speakers — auto-pick top connected speaker"
+        case .headphone: return "Headphones — auto-pick top connected headphone"
+        case .combined: return "Auto — all outputs in one priority list, no speaker/headphone split"
+        }
     }
 }
 
@@ -437,6 +524,81 @@ struct HiddenDeviceRow: View {
                 isHovering = hovering
             }
         }
+    }
+}
+
+struct SettingsPopoverButton: View {
+    @EnvironmentObject var audioManager: AudioManager
+    @State private var isShown = false
+
+    var body: some View {
+        Button {
+            isShown.toggle()
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("Settings")
+        .popover(isPresented: $isShown, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Show in menu")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+
+                tabToggle("Speakers tab", systemImage: "speaker.wave.2.fill",
+                          isOn: Binding(get: { audioManager.showSpeakersTab },
+                                        set: { audioManager.setShowSpeakersTab($0) }))
+                tabToggle("Headphones tab", systemImage: "headphones",
+                          isOn: Binding(get: { audioManager.showHeadphonesTab },
+                                        set: { audioManager.setShowHeadphonesTab($0) }))
+                tabToggle("Auto tab", systemImage: "rectangle.stack.fill",
+                          isOn: Binding(get: { audioManager.showAutoTab },
+                                        set: { audioManager.setShowAutoTab($0) }))
+                tabToggle("Manual tab", systemImage: "hand.raised.fill",
+                          isOn: Binding(get: { audioManager.showManualTab },
+                                        set: { audioManager.setShowManualTab($0) }))
+
+                Divider().padding(.vertical, 2)
+
+                tabToggle("Microphones section", systemImage: "mic.fill",
+                          isOn: Binding(get: { audioManager.showMicrophones },
+                                        set: { audioManager.setShowMicrophones($0) }))
+
+                Divider().padding(.vertical, 2)
+
+                Text("Behavior")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+
+                tabToggle("Link 'Never Use' across input + output",
+                          systemImage: "link",
+                          isOn: Binding(get: { audioManager.linkNeverUse },
+                                        set: { audioManager.setLinkNeverUse($0) }))
+                .help("When on, marking a device as 'Never Use' blocks both its input and output. When off (default), input and output are independent — useful for headsets where you want the speaker but not the mic, or vice versa.")
+            }
+            .padding(14)
+            .frame(minWidth: 240)
+        }
+    }
+
+    private func tabToggle(_ label: String, systemImage: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .frame(width: 14)
+                Text(label)
+                    .font(.system(size: 12))
+            }
+        }
+        .toggleStyle(.checkbox)
     }
 }
 

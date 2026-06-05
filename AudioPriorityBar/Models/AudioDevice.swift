@@ -9,11 +9,22 @@ enum AudioDeviceType: String, Codable {
 enum OutputCategory: String, Codable, CaseIterable {
     case speaker
     case headphone
+    /// Display-only "mode" that shows all outputs in one combined priority list.
+    /// Never used as a device category — devices are always categorized as
+    /// .speaker or .headphone for the per-category lists.
+    case combined
+
+    /// The valid categories a device can be assigned to.
+    static var deviceCategories: [OutputCategory] { [.speaker, .headphone] }
+
+    /// The selectable display modes shown in the mode toggle bar.
+    static var displayModes: [OutputCategory] { [.speaker, .headphone, .combined] }
 
     var icon: String {
         switch self {
         case .speaker: return "speaker.wave.2.fill"
         case .headphone: return "headphones"
+        case .combined: return "rectangle.stack.fill"
         }
     }
 
@@ -21,6 +32,7 @@ enum OutputCategory: String, Codable, CaseIterable {
         switch self {
         case .speaker: return "Speakers"
         case .headphone: return "Headphones"
+        case .combined: return "Auto"
         }
     }
 }

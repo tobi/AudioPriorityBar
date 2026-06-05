@@ -74,6 +74,7 @@ class AudioManager: ObservableObject {
     @Published var inputDevices: [AudioDevice] = []
     @Published var speakerDevices: [AudioDevice] = []
     @Published var headphoneDevices: [AudioDevice] = []
+    @Published var combinedDevices: [AudioDevice] = []
     @Published var hiddenInputDevices: [AudioDevice] = []
     @Published var hiddenSpeakerDevices: [AudioDevice] = []
     @Published var hiddenHeadphoneDevices: [AudioDevice] = []
@@ -83,6 +84,12 @@ class AudioManager: ObservableObject {
     @Published var volume: Float = 0
     @Published var isEditMode: Bool = false
     @Published var isCustomMode: Bool = false
+    @Published var showSpeakersTab: Bool = true
+    @Published var showHeadphonesTab: Bool = true
+    @Published var showAutoTab: Bool = true
+    @Published var showManualTab: Bool = true
+    @Published var showMicrophones: Bool = true
+    @Published var linkNeverUse: Bool = false
     @Published var mutedDeviceIds: Set<AudioObjectID> = []
     @Published var isActiveOutputMuted: Bool = false
     @Published var isActiveInputMuted: Bool = false
@@ -92,6 +99,7 @@ class AudioManager: ObservableObject {
     private var micFlashTimer: Timer?
     let priorityManager = PriorityManager()
     private var connectedDeviceUIDs: Set<String> = []
+    private var isHandlingDeviceChange = false
 
     var menuBarIcon: String {
         currentMode.icon
@@ -151,16 +159,37 @@ class AudioManager: ObservableObject {
         deviceService.setOutputVolume(newVolume)
     }
 
+    var visibleModeTabs: [OutputCategory] {
+        OutputCategory.displayModes.filter { mode in
+            switch mode {
+            case .speaker: return showSpeakersTab
+            case .headphone: return showHeadphonesTab
+            case .combined: return showAutoTab
+            }
+        }
+    }
+
+    var isAnyTabVisible: Bool {
+        !visibleModeTabs.isEmpty || showManualTab
+    }
+
     var activeOutputDevices: [AudioDevice] {
         switch currentMode {
         case .speaker: return speakerDevices
         case .headphone: return headphoneDevices
+        case .combined: return combinedDevices
         }
     }
 
     init() {
         currentMode = priorityManager.currentMode
         isCustomMode = priorityManager.isCustomMode
+        showSpeakersTab = priorityManager.showSpeakersTab
+        showHeadphonesTab = priorityManager.showHeadphonesTab
+        showAutoTab = priorityManager.showAutoTab
+        showManualTab = priorityManager.showManualTab
+        showMicrophones = priorityManager.showMicrophones
+        linkNeverUse = priorityManager.linkNeverUse
         refreshDevices()
         previousConnectedUIDs = connectedDeviceUIDs  // Initialize tracking
         refreshVolume()
@@ -192,6 +221,7 @@ class AudioManager: ObservableObject {
         for device in allConnectedDevices {
             priorityManager.rememberDevice(device.uid, name: device.name, isInput: device.type == .input)
         }
+        priorityManager.consolidateDuplicates(connectedUIDs: connectedDeviceUIDs)
         let connectedInputs = allConnectedDevices.filter { $0.type == .input }
         let connectedOutputs = allConnectedDevices.filter { $0.type == .output }
 
@@ -215,6 +245,7 @@ class AudioManager: ObservableObject {
             let headphones = allOutputs.filter { priorityManager.getCategory(for: $0) == .headphone }
             speakerDevices = priorityManager.sortByPriority(speakers, category: .speaker)
             headphoneDevices = priorityManager.sortByPriority(headphones, category: .headphone)
+            combinedDevices = priorityManager.sortByPriority(allOutputs, category: .combined)
             hiddenSpeakerDevices = []
             hiddenHeadphoneDevices = []
         } else {
@@ -237,6 +268,11 @@ class AudioManager: ObservableObject {
             let neverUseHeadphones = headphones.filter { priorityManager.isNeverUse($0) }
             speakerDevices = priorityManager.sortByPriority(visibleSpeakers, category: .speaker)
             headphoneDevices = priorityManager.sortByPriority(visibleHeadphones, category: .headphone)
+            // Combined view: all non-never-use outputs in one list. Per-category
+            // hide flags don't apply here — combined mode is the user's escape
+            // from category split, so it shouldn't inherit category-specific hides.
+            let visibleCombined = connectedOutputs.filter { !priorityManager.isNeverUse($0) }
+            combinedDevices = priorityManager.sortByPriority(visibleCombined, category: .combined)
             hiddenSpeakerDevices = regularHiddenSpeakers + neverUseSpeakers
             hiddenHeadphoneDevices = regularHiddenHeadphones + neverUseHeadphones
         }
@@ -377,6 +413,45 @@ class AudioManager: ObservableObject {
         }
     }
 
+    func moveCombinedDevice(from source: IndexSet, to destination: Int) {
+        combinedDevices.move(fromOffsets: source, toOffset: destination)
+        priorityManager.savePriorities(combinedDevices, category: .combined)
+        // In combined mode, switch to the top connected output
+        if currentMode == .combined, let top = combinedDevices.first, top.isConnected {
+            applyOutputDevice(top)
+        }
+    }
+
+    func setShowSpeakersTab(_ show: Bool) {
+        showSpeakersTab = show
+        priorityManager.showSpeakersTab = show
+    }
+
+    func setShowHeadphonesTab(_ show: Bool) {
+        showHeadphonesTab = show
+        priorityManager.showHeadphonesTab = show
+    }
+
+    func setShowAutoTab(_ show: Bool) {
+        showAutoTab = show
+        priorityManager.showAutoTab = show
+    }
+
+    func setShowManualTab(_ show: Bool) {
+        showManualTab = show
+        priorityManager.showManualTab = show
+    }
+
+    func setShowMicrophones(_ show: Bool) {
+        showMicrophones = show
+        priorityManager.showMicrophones = show
+    }
+
+    func setLinkNeverUse(_ link: Bool) {
+        linkNeverUse = link
+        priorityManager.linkNeverUse = link
+    }
+
     func setInputDevice(_ device: AudioDevice) {
         applyInputDevice(device)
     }
@@ -386,11 +461,13 @@ class AudioManager: ObservableObject {
     }
 
     private func applyInputDevice(_ device: AudioDevice) {
+        guard device.id != currentInputId else { return }
         deviceService.setDefaultDevice(device.id, type: .input)
         currentInputId = device.id
     }
 
     private func applyOutputDevice(_ device: AudioDevice) {
+        guard device.id != currentOutputId else { return }
         deviceService.setDefaultDevice(device.id, type: .output)
         currentOutputId = device.id
     }
@@ -415,18 +492,37 @@ class AudioManager: ObservableObject {
                 self?.handleDeviceChange()
             }
         }
+        deviceService.onDefaultDeviceChanged = { [weak self] in
+            Task { @MainActor in
+                self?.handleDefaultDeviceChange()
+            }
+        }
         deviceService.startListening()
     }
 
+    private func handleDefaultDeviceChange() {
+        currentInputId = deviceService.getCurrentDefaultDevice(type: .input)
+        currentOutputId = deviceService.getCurrentDefaultDevice(type: .output)
+        refreshVolume()
+        refreshMuteStatus()
+        if !isCustomMode {
+            applyHighestPriorityInput()
+        }
+    }
+
     private func handleDeviceChange() {
+        guard !isHandlingDeviceChange else { return }
+        isHandlingDeviceChange = true
+        defer { isHandlingDeviceChange = false }
+
         let oldConnectedUIDs = previousConnectedUIDs
         refreshDevices()
         refreshMuteStatus()
-        
+
         // Detect newly connected devices
         let newlyConnectedUIDs = connectedDeviceUIDs.subtracting(oldConnectedUIDs)
         previousConnectedUIDs = connectedDeviceUIDs
-        
+
         if !isCustomMode {
             // Auto-switch mode only when a new headphone connects or all headphones disconnect
             autoSwitchModeIfNeeded(newlyConnectedUIDs: newlyConnectedUIDs)
@@ -439,14 +535,18 @@ class AudioManager: ObservableObject {
     /// Only triggers on:
     /// 1. A new headphone device connects → switch to headphone mode
     /// 2. All headphones disconnect → switch to speaker mode
+    /// In combined mode, the user has explicitly opted out of category-based
+    /// auto-switching, so we don't change their mode.
     private func autoSwitchModeIfNeeded(newlyConnectedUIDs: Set<String>) {
+        guard currentMode != .combined else { return }
+
         let connectedHeadphones = headphoneDevices.filter { $0.isConnected }
         let hasConnectedHeadphones = !connectedHeadphones.isEmpty
         let hasConnectedSpeakers = speakerDevices.contains { $0.isConnected }
-        
+
         // Check if a new headphone just connected
         let newHeadphoneConnected = connectedHeadphones.contains { newlyConnectedUIDs.contains($0.uid) }
-        
+
         if newHeadphoneConnected && currentMode != .headphone {
             // A new headphone just connected - switch to headphone mode
             currentMode = .headphone

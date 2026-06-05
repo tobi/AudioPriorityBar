@@ -4,9 +4,11 @@ import AudioToolbox
 
 class AudioDeviceService {
     var onDevicesChanged: (() -> Void)?
+    var onDefaultDeviceChanged: (() -> Void)?
     var onMuteOrVolumeChanged: (() -> Void)?
 
     private var listenerBlock: AudioObjectPropertyListenerBlock?
+    private var defaultDeviceListenerBlock: AudioObjectPropertyListenerBlock?
     private var muteVolumeListenerBlock: AudioObjectPropertyListenerBlock?
     private var monitoredDeviceIds: Set<AudioObjectID> = []
 
@@ -237,7 +239,6 @@ class AudioDeviceService {
 
         listenerBlock = { [weak self] _, _ in
             self?.onDevicesChanged?()
-            // Re-register mute/volume listeners when devices change
             self?.updateMuteVolumeListeners()
         }
 
@@ -248,7 +249,10 @@ class AudioDeviceService {
             listenerBlock!
         )
 
-        // Also listen to default device changes
+        defaultDeviceListenerBlock = { [weak self] _, _ in
+            self?.onDefaultDeviceChanged?()
+        }
+
         var inputDefaultAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -258,7 +262,7 @@ class AudioDeviceService {
             AudioObjectID(kAudioObjectSystemObject),
             &inputDefaultAddress,
             DispatchQueue.main,
-            listenerBlock!
+            defaultDeviceListenerBlock!
         )
 
         var outputDefaultAddress = AudioObjectPropertyAddress(
@@ -270,7 +274,7 @@ class AudioDeviceService {
             AudioObjectID(kAudioObjectSystemObject),
             &outputDefaultAddress,
             DispatchQueue.main,
-            listenerBlock!
+            defaultDeviceListenerBlock!
         )
 
         // Initial setup of mute/volume listeners
@@ -386,50 +390,49 @@ class AudioDeviceService {
     }
 
     func stopListening() {
-        // Remove mute/volume listeners first
         removeMuteVolumeListeners()
 
-        guard let block = listenerBlock else { return }
+        if let block = listenerBlock {
+            var propertyAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDevices,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &propertyAddress,
+                DispatchQueue.main,
+                block
+            )
+            listenerBlock = nil
+        }
 
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDevices,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
+        if let block = defaultDeviceListenerBlock {
+            var inputDefaultAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &inputDefaultAddress,
+                DispatchQueue.main,
+                block
+            )
 
-        AudioObjectRemovePropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &propertyAddress,
-            DispatchQueue.main,
-            block
-        )
-
-        // Also remove default device change listeners
-        var inputDefaultAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        AudioObjectRemovePropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &inputDefaultAddress,
-            DispatchQueue.main,
-            block
-        )
-
-        var outputDefaultAddress = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        AudioObjectRemovePropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &outputDefaultAddress,
-            DispatchQueue.main,
-            block
-        )
-
-        listenerBlock = nil
+            var outputDefaultAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &outputDefaultAddress,
+                DispatchQueue.main,
+                block
+            )
+            defaultDeviceListenerBlock = nil
+        }
     }
 
     private func createDevice(id: AudioObjectID, type: AudioDeviceType) -> AudioDevice? {

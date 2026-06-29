@@ -2,8 +2,16 @@ import SwiftUI
 import CoreAudio
 import AppKit
 
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct MenuBarView: View {
     @EnvironmentObject var audioManager: AudioManager
+    @State private var contentHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,8 +89,14 @@ struct MenuBarView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+                    }
+                )
             }
-            .frame(maxHeight: 420)
+            .frame(height: min(max(contentHeight, 1), 420))
+            .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
 
             Divider()
                 .padding(.horizontal, 12)

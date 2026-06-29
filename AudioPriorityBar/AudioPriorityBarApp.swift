@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreAudio
+import AVFoundation
 
 @main
 struct AudioPriorityBarApp: App {
@@ -170,6 +171,30 @@ class AudioManager: ObservableObject {
         if !isCustomMode {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
+        }
+        requestMicrophoneAccess()
+    }
+
+    /// macOS hides input device streams from apps without Microphone permission,
+    /// so input devices won't appear until access is granted. Request it on launch
+    /// and refresh the device list once the user responds.
+    private func requestMicrophoneAccess() {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            break
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.refreshDevices()
+                    self.refreshMuteStatus()
+                    if !self.isCustomMode {
+                        self.applyHighestPriorityInput()
+                    }
+                }
+            }
+        default:
+            break
         }
     }
 

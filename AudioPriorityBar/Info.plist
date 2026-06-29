@@ -24,5 +24,7 @@
     <string>public.app-category.utilities</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Audio Priority Bar needs microphone access to list and manage your input (microphone) devices.</string>
 </dict>
 </plist>

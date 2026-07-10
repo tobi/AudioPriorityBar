@@ -6,6 +6,7 @@ struct DeviceListView: View {
     let currentDeviceId: AudioObjectID?
     let onMove: (IndexSet, Int) -> Void
     let onSelect: (AudioDevice) -> Void
+    let onPromote: (AudioDevice) -> Void
     let selectionChangesPriority: Bool
     var onHide: ((AudioDevice) -> Void)?
     var onUnhide: ((AudioDevice) -> Void)?
@@ -13,6 +14,7 @@ struct DeviceListView: View {
     // Only track which item is being dragged and the target - not the offset
     @State private var draggingIndex: Int? = nil
     @State private var targetIndex: Int? = nil
+    @State private var dragSnapshot: [String] = []
     
     private let rowHeight: CGFloat = 32
 
@@ -26,11 +28,7 @@ struct DeviceListView: View {
                     isSelected: device.id == currentDeviceId,
                     onSelect: { onSelect(device) },
                     selectionChangesPriority: selectionChangesPriority,
-                    onPromote: {
-                        // Persist an explicit top-row choice too; it may be the first configured priority.
-                        onMove(IndexSet(integer: index), 0)
-                        onSelect(device)
-                    },
+                    onPromote: { onPromote(device) },
                     onHide: onHide,
                     onUnhide: onUnhide,
                     isDragging: draggingIndex == index,
@@ -40,6 +38,7 @@ struct DeviceListView: View {
                     deviceCount: devices.count,
                     onDragStarted: {
                         draggingIndex = index
+                        dragSnapshot = devices.map(\.roleIdentifier)
                     },
                     onTargetChanged: { newTarget in
                         targetIndex = newTarget
@@ -49,6 +48,11 @@ struct DeviceListView: View {
                     }
                 )
                 .zIndex(draggingIndex == index ? 100 : 0)
+            }
+        }
+        .onChange(of: devices.map(\.roleIdentifier)) { identifiers in
+            if !dragSnapshot.isEmpty && identifiers != dragSnapshot {
+                resetDragState()
             }
         }
     }
@@ -64,11 +68,24 @@ struct DeviceListView: View {
     }
     
     private func performMove(fromIndex: Int) {
-        if let target = targetIndex, target != fromIndex {
+        let currentIdentifiers = devices.map(\.roleIdentifier)
+        guard dragSnapshot == currentIdentifiers,
+              devices.indices.contains(fromIndex) else {
+            resetDragState()
+            return
+        }
+        if let target = targetIndex,
+           target != fromIndex,
+           (0...devices.count).contains(target) {
             onMove(IndexSet(integer: fromIndex), target)
         }
+        resetDragState()
+    }
+
+    private func resetDragState() {
         draggingIndex = nil
         targetIndex = nil
+        dragSnapshot = []
     }
 }
 
@@ -282,8 +299,7 @@ struct DraggableDeviceRow: View {
                     if isDisconnected {
                         Divider()
                         Button(role: .destructive) {
-                            audioManager.priorityManager.forgetDevice(device.uid, type: device.type)
-                            audioManager.refreshDevices()
+                            audioManager.forgetDevice(device)
                         } label: {
                             Label("Forget Device", systemImage: "trash")
                         }

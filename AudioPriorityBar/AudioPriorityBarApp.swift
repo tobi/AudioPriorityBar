@@ -88,6 +88,7 @@ class AudioManager: ObservableObject {
     private var connectedDeviceRoleIdentifiers: Set<String> = []
     private var connectedInputDevices: [AudioDevice] = []
     private var connectedOutputDevices: [AudioDevice] = []
+    private var defaultDeviceChangeTracker = DefaultDeviceChangeTracker()
 
     var menuBarIcon: String {
         isAutomationPaused ? "pause.circle.fill" : "speaker.wave.2.fill"
@@ -199,6 +200,8 @@ class AudioManager: ObservableObject {
         let connectedOutputs = allConnectedDevices.filter { $0.type == .output }
         connectedInputDevices = connectedInputs
         connectedOutputDevices = connectedOutputs
+        priorityManager.registerDiscoveredUIDs(connectedInputs.map(\.uid), type: .input)
+        priorityManager.registerDiscoveredUIDs(connectedOutputs.map(\.uid), type: .output)
 
         if isEditMode {
             let knownDevices = priorityManager.getKnownDevices()
@@ -216,6 +219,8 @@ class AudioManager: ObservableObject {
                     allOutputs.append(.disconnected(uid: stored.uid, name: stored.name, type: .output))
                 }
             }
+            appendCanonicalPlaceholders(to: &allInputs, type: .input)
+            appendCanonicalPlaceholders(to: &allOutputs, type: .output)
             inputDevices = priorityManager.sortByPriority(allInputs, type: .input)
             outputDevices = priorityManager.sortByPriority(allOutputs, type: .output)
         } else {
@@ -311,7 +316,14 @@ class AudioManager: ObservableObject {
 
     func moveInputDevice(from source: IndexSet, to destination: Int) {
         inputDevices.move(fromOffsets: source, toOffset: destination)
-        priorityManager.savePriorities(inputDevices, type: .input)
+        if isEditMode {
+            guard priorityManager.reorderCanonical(inputDevices, type: .input) else {
+                refreshDevices()
+                return
+            }
+        } else {
+            priorityManager.mergeVisibleOrder(inputDevices, type: .input)
+        }
         if isInputAutomationActive {
             applyHighestPriorityInput()
         }
@@ -319,8 +331,43 @@ class AudioManager: ObservableObject {
 
     func moveOutputDevice(from source: IndexSet, to destination: Int) {
         outputDevices.move(fromOffsets: source, toOffset: destination)
-        priorityManager.savePriorities(outputDevices, type: .output)
+        if isEditMode {
+            guard priorityManager.reorderCanonical(outputDevices, type: .output) else {
+                refreshDevices()
+                return
+            }
+        } else {
+            priorityManager.mergeVisibleOrder(outputDevices, type: .output)
+        }
         if isOutputAutomationActive {
+            applyHighestPriorityOutput()
+        }
+    }
+
+    func promoteInputDevice(_ device: AudioDevice) {
+        priorityManager.promote(device, visibleDevices: inputDevices)
+        refreshDevices()
+        applyInputDevice(
+            device,
+            preserveManualSelection: !priorityManager.isEligibleForAutoUse(device)
+        )
+    }
+
+    func promoteOutputDevice(_ device: AudioDevice) {
+        priorityManager.promote(device, visibleDevices: outputDevices)
+        refreshDevices()
+        applyOutputDevice(
+            device,
+            preserveManualSelection: !priorityManager.isEligibleForAutoUse(device)
+        )
+    }
+
+    func forgetDevice(_ device: AudioDevice) {
+        priorityManager.forgetDevice(device.uid, type: device.type)
+        refreshDevices()
+        if device.type == .input, isInputAutomationActive {
+            applyHighestPriorityInput()
+        } else if device.type == .output, isOutputAutomationActive {
             applyHighestPriorityOutput()
         }
     }
@@ -333,14 +380,48 @@ class AudioManager: ObservableObject {
         applyOutputDevice(device)
     }
 
-    private func applyInputDevice(_ device: AudioDevice) {
-        deviceService.setDefaultDevice(device.id, type: .input)
-        currentInputId = device.id
+    private func applyInputDevice(
+        _ device: AudioDevice,
+        preserveManualSelection: Bool = false
+    ) {
+        guard device.isConnected else {
+            defaultDeviceChangeTracker.clearManualSelection(type: .input)
+            return
+        }
+        if preserveManualSelection {
+            defaultDeviceChangeTracker.preserveManualSelection(device.id, type: .input)
+        } else {
+            defaultDeviceChangeTracker.clearManualSelection(type: .input)
+        }
+        guard currentInputId != device.id else { return }
+        if deviceService.setDefaultDevice(device.id, type: .input) {
+            currentInputId = device.id
+        } else {
+            defaultDeviceChangeTracker.clearManualSelection(type: .input)
+            currentInputId = deviceService.getCurrentDefaultDevice(type: .input)
+        }
     }
 
-    private func applyOutputDevice(_ device: AudioDevice) {
-        deviceService.setDefaultDevice(device.id, type: .output)
-        currentOutputId = device.id
+    private func applyOutputDevice(
+        _ device: AudioDevice,
+        preserveManualSelection: Bool = false
+    ) {
+        guard device.isConnected else {
+            defaultDeviceChangeTracker.clearManualSelection(type: .output)
+            return
+        }
+        if preserveManualSelection {
+            defaultDeviceChangeTracker.preserveManualSelection(device.id, type: .output)
+        } else {
+            defaultDeviceChangeTracker.clearManualSelection(type: .output)
+        }
+        guard currentOutputId != device.id else { return }
+        if deviceService.setDefaultDevice(device.id, type: .output) {
+            currentOutputId = device.id
+        } else {
+            defaultDeviceChangeTracker.clearManualSelection(type: .output)
+            currentOutputId = deviceService.getCurrentDefaultDevice(type: .output)
+        }
     }
 
     private func applyHighestPriorityInput() {
@@ -370,10 +451,40 @@ class AudioManager: ObservableObject {
                 self?.handleDeviceChange()
             }
         }
+        deviceService.onDefaultDeviceChanged = { [weak self] type in
+            Task { @MainActor in
+                self?.handleDefaultDeviceChange(type: type)
+            }
+        }
         deviceService.startListening()
     }
 
+    private func handleDefaultDeviceChange(type: AudioDeviceType) {
+        let currentDeviceId = deviceService.getCurrentDefaultDevice(type: type)
+        let preservesManualSelection = defaultDeviceChangeTracker.shouldPreserveManualSelection(
+            currentDeviceId: currentDeviceId,
+            type: type
+        )
+
+        switch type {
+        case .input:
+            currentInputId = currentDeviceId
+        case .output:
+            currentOutputId = currentDeviceId
+            refreshVolume()
+        }
+        refreshMuteStatus()
+
+        guard !preservesManualSelection else { return }
+        if type == .input, isInputAutomationActive {
+            applyHighestPriorityInput()
+        } else if type == .output, isOutputAutomationActive {
+            applyHighestPriorityOutput()
+        }
+    }
+
     private func handleDeviceChange() {
+        defaultDeviceChangeTracker.clearAllManualSelections()
         refreshDevices()
         refreshMuteStatus()
 
@@ -383,6 +494,24 @@ class AudioManager: ObservableObject {
 
         if isOutputAutomationActive {
             applyHighestPriorityOutput()
+        }
+    }
+
+    private func appendCanonicalPlaceholders(
+        to devices: inout [AudioDevice],
+        type: AudioDeviceType
+    ) {
+        var existingUIDs = Set(devices.map(\.uid))
+        for uid in priorityManager.priorityUIDs(type: type) where !existingUIDs.contains(uid) {
+            let suffix = uid.count > 8 ? String(uid.suffix(8)) : uid
+            devices.append(
+                .disconnected(
+                    uid: uid,
+                    name: "Unknown Device (\(suffix))",
+                    type: type
+                )
+            )
+            existingUIDs.insert(uid)
         }
     }
 }

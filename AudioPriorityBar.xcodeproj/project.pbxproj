@@ -15,8 +15,14 @@
 		A10000000000000000000006 /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* DeviceListView.swift */; };
 		A10000000000000000000007 /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* LaunchAtLoginManager.swift */; };
 		A10000000000000000000011 /* AdaptiveDeviceListLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* AdaptiveDeviceListLayout.swift */; };
+		A10000000000000000000012 /* DefaultDeviceChangeTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* DefaultDeviceChangeTracker.swift */; };
 		A10000000000000000000010 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* CoreAudio.framework */; };
 		A10000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* Assets.xcassets */; };
+		A10000000000000000000030 /* PriorityManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000030 /* PriorityManagerTests.swift */; };
+		A10000000000000000000031 /* AudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AudioDevice.swift */; };
+		A10000000000000000000032 /* PriorityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* PriorityManager.swift */; };
+		A10000000000000000000033 /* DefaultDeviceChangeTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* DefaultDeviceChangeTracker.swift */; };
+		A10000000000000000000034 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* CoreAudio.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -29,9 +35,12 @@
 		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000008 /* LaunchAtLoginManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginManager.swift; sourceTree = "<group>"; };
 		A20000000000000000000011 /* AdaptiveDeviceListLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdaptiveDeviceListLayout.swift; sourceTree = "<group>"; };
+		A20000000000000000000012 /* DefaultDeviceChangeTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultDeviceChangeTracker.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		A20000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000030 /* PriorityManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriorityManagerTests.swift; sourceTree = "<group>"; };
 		A30000000000000000000001 /* AudioPriorityBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioPriorityBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000002 /* AudioPriorityBarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AudioPriorityBarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,6 +52,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A40000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000034 /* CoreAudio.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -50,6 +67,7 @@
 			isa = PBXGroup;
 			children = (
 				A50000000000000000000002 /* AudioPriorityBar */,
+				A50000000000000000000008 /* AudioPriorityBarTests */,
 				A50000000000000000000007 /* Frameworks */,
 				A50000000000000000000006 /* Products */,
 			);
@@ -72,6 +90,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000002 /* AudioDevice.swift */,
+				A20000000000000000000012 /* DefaultDeviceChangeTracker.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -100,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				A30000000000000000000001 /* AudioPriorityBar.app */,
+				A30000000000000000000002 /* AudioPriorityBarTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -110,6 +130,14 @@
 				A20000000000000000000010 /* CoreAudio.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A50000000000000000000008 /* AudioPriorityBarTests */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000030 /* PriorityManagerTests.swift */,
+			);
+			path = AudioPriorityBarTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -143,6 +171,22 @@
 			productReference = A30000000000000000000001 /* AudioPriorityBar.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A60000000000000000000002 /* AudioPriorityBarTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000003 /* Build configuration list for PBXNativeTarget "AudioPriorityBarTests" */;
+			buildPhases = (
+				A70000000000000000000002 /* Sources */,
+				A40000000000000000000003 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AudioPriorityBarTests;
+			productName = AudioPriorityBarTests;
+			productReference = A30000000000000000000002 /* AudioPriorityBarTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -154,6 +198,9 @@
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					A60000000000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					A60000000000000000000002 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
@@ -172,6 +219,7 @@
 			projectRoot = "";
 			targets = (
 				A60000000000000000000001 /* AudioPriorityBar */,
+				A60000000000000000000002 /* AudioPriorityBarTests */,
 			);
 		};
 /* End PBXProject section */
@@ -189,6 +237,18 @@
 				A10000000000000000000006 /* DeviceListView.swift in Sources */,
 				A10000000000000000000007 /* LaunchAtLoginManager.swift in Sources */,
 				A10000000000000000000011 /* AdaptiveDeviceListLayout.swift in Sources */,
+				A10000000000000000000012 /* DefaultDeviceChangeTracker.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A70000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000030 /* PriorityManagerTests.swift in Sources */,
+				A10000000000000000000031 /* AudioDevice.swift in Sources */,
+				A10000000000000000000032 /* PriorityManager.swift in Sources */,
+				A10000000000000000000033 /* DefaultDeviceChangeTracker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -371,6 +431,40 @@
 			};
 			name = Release;
 		};
+		B30000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B30000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -388,6 +482,15 @@
 			buildConfigurations = (
 				B10000000000000000000001 /* Debug */,
 				B10000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A80000000000000000000003 /* Build configuration list for PBXNativeTarget "AudioPriorityBarTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B30000000000000000000001 /* Debug */,
+				B30000000000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

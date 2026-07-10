@@ -100,6 +100,7 @@ struct MenuBarView: View {
                 onAutoSwitchChanged: audioManager.setOutputAutoSwitchEnabled,
                 onMove: audioManager.moveOutputDevice,
                 onSelect: audioManager.setOutputDevice,
+                onPromote: audioManager.promoteOutputDevice,
                 onHide: audioManager.hideDevice,
                 onUnhide: audioManager.unhideDevice,
                 showsOutputControls: true
@@ -120,6 +121,7 @@ struct MenuBarView: View {
                 onAutoSwitchChanged: audioManager.setInputAutoSwitchEnabled,
                 onMove: audioManager.moveInputDevice,
                 onSelect: audioManager.setInputDevice,
+                onPromote: audioManager.promoteInputDevice,
                 onHide: audioManager.hideDevice,
                 onUnhide: audioManager.unhideDevice
             )
@@ -315,6 +317,7 @@ struct DeviceSectionView: View {
     let onAutoSwitchChanged: (Bool) -> Void
     let onMove: (IndexSet, Int) -> Void
     let onSelect: (AudioDevice) -> Void
+    let onPromote: (AudioDevice) -> Void
     var onHide: ((AudioDevice) -> Void)?
     var onUnhide: ((AudioDevice) -> Void)?
     var showsOutputControls: Bool = false
@@ -389,6 +392,7 @@ struct DeviceSectionView: View {
                         currentDeviceId: currentDeviceId,
                         onMove: onMove,
                         onSelect: onSelect,
+                        onPromote: onPromote,
                         selectionChangesPriority: audioManager.isAutomationActive(for: type),
                         onHide: onHide,
                         onUnhide: onUnhide

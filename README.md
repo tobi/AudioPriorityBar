@@ -70,13 +70,13 @@ Changing input priority does not change output priority, and changing output pri
 
 ### Managing Priorities
 
-- **Click a device**: When Auto-switch is on for that role, moves the device to #1 priority and selects it. When Auto-switch is off or all automation is paused, selects it without changing saved priority.
-- **Drag devices**: Reorder by dragging the handle
+- **Click a device**: When Auto-switch is on for that role, moves the device to the absolute #1 priority and selects it. When Auto-switch is off or all automation is paused, selects it without changing saved priority.
+- **Drag devices**: In the normal list, reorders only the visible devices while disconnected or ignored devices keep their saved positions. Edit mode shows the complete remembered order when you need to move a disconnected device relative to connected devices.
 
 ### Device Actions (hover menu)
 
 - **Ignore as input/output**: Hide the device and exclude it from automatic selection for that role
-- **Never use as input/output**: Keep the device visible, but skip it when auto-selecting that role
+- **Never use as input/output**: Keep the device visible and manually selectable, but skip it when auto-selecting that role
 - **Allow auto-use as input/output**: Let the app automatically select that role for the device again
 - **Forget Device**: Remove disconnected device from memory
 
@@ -94,14 +94,14 @@ Click "Edit" in the footer to:
 - See all devices ever connected (disconnected ones grayed out)
 - See ignored devices and stop ignoring them
 - Change Auto-use eligibility for connected or remembered devices
-- Reorder disconnected devices in the priority list
+- Reorder the complete saved priority list, including disconnected devices
 - View "last seen" timestamps
 - Forget old devices you no longer use
 
 ## How It Works
 
 1. **Device Discovery**: Uses CoreAudio to enumerate audio devices and listen for changes.
-2. **Priority Storage**: Device priorities are stored in UserDefaults, keyed by CoreAudio device UID (stable across reconnects).
+2. **Priority Storage**: Each role keeps one complete priority order in UserDefaults, keyed by CoreAudio device UID. Normal-list reordering merges visible devices into that order without deleting disconnected or ignored devices.
 3. **Role-Specific Auto-Use**: Input and output auto-use settings are stored separately, so disabling automatic input use does not disable output use for the same device.
 4. **Auto-Switching**: When devices connect/disconnect, each enabled role automatically selects its highest-priority connected device that is neither ignored nor set to Auto-use off, unless all automation is paused.
 
@@ -113,13 +113,16 @@ Older Custom/Manual automation settings are migrated to the new role controls wh
 
 On a new install, the app waits for you to set a priority list before auto-selecting a role. This avoids changing the current macOS input or output based only on CoreAudio enumeration order.
 
+After a role has been configured, newly discovered devices are added at the end of its saved order. Forgetting a device removes that role's remembered device record, priority, Ignore state, and Auto-use state without changing the opposite role for hardware that exposes both input and output.
+
 ## Project Structure
 
 ```
 AudioPriorityBar/
 ├── AudioPriorityBarApp.swift    # App entry, MenuBarExtra, AudioManager
 ├── Models/
-│   └── AudioDevice.swift        # Device model
+│   ├── AudioDevice.swift        # Device model
+│   └── DefaultDeviceChangeTracker.swift # Preserves deliberate manual selections
 ├── Services/
 │   ├── AudioDeviceService.swift # CoreAudio wrapper
 │   └── PriorityManager.swift    # Priority persistence
@@ -127,6 +130,8 @@ AudioPriorityBar/
     ├── AdaptiveDeviceListLayout.swift # Screen-bounded list height allocation
     ├── MenuBarView.swift        # Main popover UI
     └── DeviceListView.swift     # Device list and row components
+AudioPriorityBarTests/
+└── PriorityManagerTests.swift   # Priority persistence and change-tracking tests
 ```
 
 ## Contributing

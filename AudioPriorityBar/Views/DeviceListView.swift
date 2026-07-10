@@ -1,44 +1,36 @@
 import SwiftUI
 import CoreAudio
-import UniformTypeIdentifiers
 
 struct DeviceListView: View {
     let devices: [AudioDevice]
     let currentDeviceId: AudioObjectID?
     let onMove: (IndexSet, Int) -> Void
     let onSelect: (AudioDevice) -> Void
-    var showCategoryPicker: Bool = false
+    let onPromote: (AudioDevice) -> Void
+    let selectionChangesPriority: Bool
     var onHide: ((AudioDevice) -> Void)?
     var onUnhide: ((AudioDevice) -> Void)?
-    var isHiddenSection: Bool = false
-    var category: OutputCategory? = nil
 
     // Only track which item is being dragged and the target - not the offset
     @State private var draggingIndex: Int? = nil
     @State private var targetIndex: Int? = nil
+    @State private var dragSnapshot: [String] = []
     
     private let rowHeight: CGFloat = 32
 
     var body: some View {
         VStack(spacing: 4) {
-            ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
+            ForEach(Array(devices.enumerated()), id: \.element.roleIdentifier) { index, device in
                 DraggableDeviceRow(
                     device: device,
                     index: index,
                     totalCount: devices.count,
                     isSelected: device.id == currentDeviceId,
                     onSelect: { onSelect(device) },
-                    showCategoryPicker: showCategoryPicker,
+                    selectionChangesPriority: selectionChangesPriority,
+                    onPromote: { onPromote(device) },
                     onHide: onHide,
                     onUnhide: onUnhide,
-                    isHiddenSection: isHiddenSection,
-                    category: category,
-                    onMoveUp: index > 0 ? {
-                        onMove(IndexSet(integer: index), index - 1)
-                    } : nil,
-                    onMoveDown: index < devices.count - 1 ? {
-                        onMove(IndexSet(integer: index), index + 2)
-                    } : nil,
                     isDragging: draggingIndex == index,
                     isDropTarget: isDropTarget(for: index),
                     isDropTargetBelow: isDropTargetBelow(for: index),
@@ -46,6 +38,7 @@ struct DeviceListView: View {
                     deviceCount: devices.count,
                     onDragStarted: {
                         draggingIndex = index
+                        dragSnapshot = devices.map(\.roleIdentifier)
                     },
                     onTargetChanged: { newTarget in
                         targetIndex = newTarget
@@ -55,6 +48,11 @@ struct DeviceListView: View {
                     }
                 )
                 .zIndex(draggingIndex == index ? 100 : 0)
+            }
+        }
+        .onChange(of: devices.map(\.roleIdentifier)) { identifiers in
+            if !dragSnapshot.isEmpty && identifiers != dragSnapshot {
+                resetDragState()
             }
         }
     }
@@ -70,11 +68,24 @@ struct DeviceListView: View {
     }
     
     private func performMove(fromIndex: Int) {
-        if let target = targetIndex, target != fromIndex {
+        let currentIdentifiers = devices.map(\.roleIdentifier)
+        guard dragSnapshot == currentIdentifiers,
+              devices.indices.contains(fromIndex) else {
+            resetDragState()
+            return
+        }
+        if let target = targetIndex,
+           target != fromIndex,
+           (0...devices.count).contains(target) {
             onMove(IndexSet(integer: fromIndex), target)
         }
+        resetDragState()
+    }
+
+    private func resetDragState() {
         draggingIndex = nil
         targetIndex = nil
+        dragSnapshot = []
     }
 }
 
@@ -86,13 +97,10 @@ struct DraggableDeviceRow: View {
     var totalCount: Int = 1
     let isSelected: Bool
     let onSelect: () -> Void
-    var showCategoryPicker: Bool = false
+    let selectionChangesPriority: Bool
+    let onPromote: () -> Void
     var onHide: ((AudioDevice) -> Void)?
     var onUnhide: ((AudioDevice) -> Void)?
-    var isHiddenSection: Bool = false
-    var category: OutputCategory? = nil
-    var onMoveUp: (() -> Void)?
-    var onMoveDown: (() -> Void)?
     let isDragging: Bool
     var isDropTarget: Bool = false
     var isDropTargetBelow: Bool = false
@@ -110,15 +118,15 @@ struct DraggableDeviceRow: View {
     }
 
     var isIgnored: Bool {
-        audioManager.isDeviceIgnored(device, inCategory: category)
+        audioManager.isDeviceIgnored(device)
     }
 
     var isGrayed: Bool {
-        isDisconnected || isHiddenSection
+        isDisconnected
     }
 
-    var isNeverUse: Bool {
-        audioManager.isNeverUse(device)
+    var isAutoUseDisabled: Bool {
+        audioManager.isAutoUseDisabled(device)
     }
 
     var statusIcon: String? {
@@ -126,7 +134,7 @@ struct DraggableDeviceRow: View {
             return "wifi.slash"
         } else if isIgnored && audioManager.isEditMode {
             return "eye.slash"
-        } else if isNeverUse {
+        } else if isAutoUseDisabled {
             return "nosign"
         }
         return nil
@@ -134,7 +142,7 @@ struct DraggableDeviceRow: View {
 
     var lastSeenText: String? {
         guard isDisconnected,
-              let stored = audioManager.priorityManager.getStoredDevice(uid: device.uid) else {
+              let stored = audioManager.priorityManager.getStoredDevice(for: device) else {
             return nil
         }
         return stored.lastSeenRelative
@@ -155,52 +163,78 @@ struct DraggableDeviceRow: View {
         return newTarget
     }
 
+    private var reorderGesture: some Gesture {
+        DragGesture(minimumDistance: 5)
+            .onChanged { value in
+                if !isDragging {
+                    onDragStarted()
+                }
+                let newTarget = calculateTarget(offset: value.translation.height)
+                if newTarget != lastReportedTarget {
+                    lastReportedTarget = newTarget
+                    onTargetChanged(newTarget)
+                }
+            }
+            .onEnded { _ in
+                lastReportedTarget = nil
+                onDragEnded()
+            }
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             // Drag handle + priority label area
-            if !isHiddenSection {
-                ZStack {
-                    // Drag handle icon
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(width: 36, height: rowHeight)
-                        .opacity(isHovering || isDragging ? 1 : 0)
-                        .scaleEffect(isHovering || isDragging ? 1 : 0.8)
-                    
-                    // Priority number or "Active" label when not hovering
-                    Group {
-                        if isSelected && !isDisconnected {
-                            Text("Active")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.accentColor)
-                        } else {
-                            Text("\(index + 1)")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.secondary.opacity(0.8))
-                        }
+            ZStack {
+                // Drag handle icon
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .frame(width: 36, height: rowHeight)
+                    .opacity(isHovering || isDragging ? 1 : 0)
+                    .scaleEffect(isHovering || isDragging ? 1 : 0.8)
+
+                // Priority number or "Active" label when not hovering
+                Group {
+                    if isSelected && !isDisconnected {
+                        Text("Active")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.accentColor)
+                    } else {
+                        Text("\(index + 1)")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.8))
                     }
-                    .opacity(isHovering || isDragging ? 0 : 1)
-                    .scaleEffect(isHovering || isDragging ? 0.8 : 1)
                 }
-                .frame(width: 36)
-                .animation(.easeInOut(duration: 0.12), value: isHovering)
-                .animation(.easeInOut(duration: 0.12), value: isDragging)
+                .opacity(isHovering || isDragging ? 0 : 1)
+                .scaleEffect(isHovering || isDragging ? 0.8 : 1)
             }
+            .frame(width: 36)
+            .contentShape(Rectangle())
+            .gesture(reorderGesture)
+            .animation(.easeInOut(duration: 0.12), value: isHovering)
+            .animation(.easeInOut(duration: 0.12), value: isDragging)
 
             // Device name - use HStack with tap gesture instead of Button to not interfere with drag
             HStack(spacing: 8) {
                 Text(device.name)
                     .font(.system(size: 13, weight: .regular))
-                    .strikethrough(isNeverUse, color: .secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .foregroundColor(isGrayed || isNeverUse ? .secondary : .primary)
+                    .foregroundColor(isGrayed ? .secondary : .primary)
 
                 if let icon = statusIcon {
                     Image(systemName: icon)
                         .font(.system(size: 10))
                         .foregroundColor(.secondary.opacity(0.7))
+                }
+
+                if isAutoUseDisabled {
+                    Text("Auto-use off")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.primary.opacity(0.08)))
                 }
 
                 if let lastSeen = lastSeenText {
@@ -241,23 +275,13 @@ struct DraggableDeviceRow: View {
                 if isHovering && !isDragging {
                     Group {
                     Menu {
-                    if showCategoryPicker {
+                    if isIgnored {
                         Button {
-                            audioManager.setCategory(.speaker, for: device)
-                        } label: {
-                            Label("Move to Speakers", systemImage: "speaker.wave.2.fill")
-                        }
-                        Button {
-                            audioManager.setCategory(.headphone, for: device)
-                        } label: {
-                            Label("Move to Headphones", systemImage: "headphones")
-                        }
-                        Divider()
-                    }
-
-                    if isHiddenSection || isIgnored {
-                        Button {
-                            audioManager.unhideDevice(device)
+                            if let onUnhide {
+                                onUnhide(device)
+                            } else {
+                                audioManager.unhideDevice(device)
+                            }
                         } label: {
                             Label("Stop Ignoring", systemImage: "eye")
                         }
@@ -266,17 +290,8 @@ struct DraggableDeviceRow: View {
                             Button {
                                 onHide(device)
                             } label: {
-                                let categoryLabel = device.type == .input ? "microphone" :
-                                    (category == .headphone ? "headphone" : "speaker")
-                                Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
-                            }
-
-                            if device.type == .output {
-                                Button {
-                                    audioManager.hideDeviceEntirely(device)
-                                } label: {
-                                    Label("Ignore entirely", systemImage: "eye.slash.fill")
-                                }
+                                let role = device.type == .input ? "input" : "output"
+                                Label("Ignore as \(role)", systemImage: "eye.slash")
                             }
                         }
                     }
@@ -284,22 +299,22 @@ struct DraggableDeviceRow: View {
                     if isDisconnected {
                         Divider()
                         Button(role: .destructive) {
-                            audioManager.priorityManager.forgetDevice(device.uid)
-                            audioManager.refreshDevices()
+                            audioManager.forgetDevice(device)
                         } label: {
                             Label("Forget Device", systemImage: "trash")
                         }
                     }
 
-                    if device.isConnected {
+                    if device.isConnected || audioManager.isEditMode {
                         Divider()
                         Button {
-                            audioManager.setNeverUse(device, neverUse: !audioManager.isNeverUse(device))
+                            audioManager.setAutoUseDisabled(device, disabled: !audioManager.isAutoUseDisabled(device))
                         } label: {
-                            if audioManager.isNeverUse(device) {
-                                Label("Allow Use", systemImage: "checkmark.circle")
+                            let role = device.type == .input ? "input" : "output"
+                            if audioManager.isAutoUseDisabled(device) {
+                                Label("Allow auto-use as \(role)", systemImage: "checkmark.circle")
                             } else {
-                                Label("Never Use", systemImage: "nosign")
+                                Label("Never use as \(role)", systemImage: "nosign")
                             }
                         }
                     }
@@ -364,27 +379,15 @@ struct DraggableDeviceRow: View {
         .animation(.easeInOut(duration: 0.1), value: isDropTargetBelow)
         .contentShape(Rectangle())
         .onTapGesture {
-            if !isDisconnected && audioManager.isCustomMode {
+            if isDisconnected {
+                return
+            }
+            if selectionChangesPriority {
+                onPromote()
+            } else {
                 onSelect()
             }
         }
-        .gesture(
-            DragGesture(minimumDistance: 5)
-                .onChanged { value in
-                    if !isDragging {
-                        onDragStarted()
-                    }
-                    let newTarget = calculateTarget(offset: value.translation.height)
-                    if newTarget != lastReportedTarget {
-                        lastReportedTarget = newTarget
-                        onTargetChanged(newTarget)
-                    }
-                }
-                .onEnded { _ in
-                    lastReportedTarget = nil
-                    onDragEnded()
-                }
-        )
     }
 }
 

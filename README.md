@@ -119,11 +119,12 @@ After a role has been configured, newly discovered devices are added at the end 
 
 ```
 AudioPriorityBar/
-├── AudioPriorityBarApp.swift    # App entry, MenuBarExtra, AudioManager
+├── AudioPriorityBarApp.swift    # App entry and MenuBarExtra
 ├── Models/
 │   ├── AudioDevice.swift        # Device model
 │   └── DefaultDeviceChangeTracker.swift # Preserves deliberate manual selections
 ├── Services/
+│   ├── AudioManager.swift       # App state and audio automation
 │   ├── AudioDeviceService.swift # CoreAudio wrapper
 │   └── PriorityManager.swift    # Priority persistence
 └── Views/

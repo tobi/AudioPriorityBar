@@ -4,24 +4,24 @@
   <img src="icon.png" width="128" height="128" alt="Audio Priority Bar Icon">
 </p>
 
-A native macOS menu bar app that automatically manages audio device priorities. Set your preferred order for speakers, headphones, and microphones - the app automatically switches to the highest-priority connected device.
+A native macOS menu bar app that automatically manages audio device priorities. Set your preferred order for output and input devices - the app automatically switches each role to the highest-priority connected device.
 
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-![Screenshot](screenshot.jpeg)
-
 ## Features
 
-- **Priority-based auto-switching**: Devices are ranked by priority. When a higher-priority device connects, it automatically becomes active.
-- **Separate speaker/headphone modes**: Output devices are categorized as either speakers or headphones, each with their own priority list.
-- **Manual override**: Enable "Custom" mode (hand icon) to disable auto-switching and select devices freely.
+- **Priority-based auto-switching**: Devices are ranked by priority. When a higher-priority eligible device connects, it automatically becomes active for that role.
+- **Output and input priority lists**: Output devices share one priority list, and input devices share a separate priority list.
+- **Independent automation**: Output and Input Auto-switch can be enabled or disabled without affecting the other role.
+- **Pause all automation**: Temporarily stop both roles, then resume their unchanged individual settings.
+- **Role-specific auto-use controls**: Disable automatic use for input or output without affecting the other role.
 - **Device memory**: Remembers all devices you've ever connected, even when disconnected. Edit mode shows disconnected devices with "last seen" timestamps.
-- **Per-category ignore**: Hide devices from specific categories without affecting others.
-- **Drag-to-reorder**: Reorder devices by dragging or using up/down arrows.
+- **Per-role ignore**: Hide a device from the normal list and exclude it from automatic selection for that role.
+- **Drag-to-reorder**: Reorder devices by dragging the priority handle.
 - **Volume control**: Adjust volume with slider or scroll wheel.
-- **Menu bar integration**: Shows current mode icon and volume percentage.
+- **Menu bar integration**: Shows audio status from the macOS menu bar.
 
 ## Installation
 
@@ -50,31 +50,50 @@ Check the [Releases](https://github.com/tobi/AudioPriorityBar/releases) page for
 
 ## Usage
 
-### Modes
+### Priority Roles
 
-| Mode | Icon | Behavior |
-|------|------|----------|
-| **Speakers** | 🔊 | Shows speaker devices, auto-switches to highest priority |
-| **Headphones** | 🎧 | Shows headphone devices, auto-switches to highest priority |
-| **Custom** | ✋ | Shows all devices, no auto-switching |
+The menu shows two priority lists:
+
+- **Output**: All output devices in priority order. Row 1 is the highest-priority output.
+- **Input**: All input devices in priority order. Row 1 is the highest-priority input.
+
+Changing input priority does not change output priority, and changing output priority does not change input priority.
+
+### Common setup: headphones for output, USB microphone for input
+
+1. Connect your Bluetooth headphones and external USB microphone.
+2. In **Output**, drag the Bluetooth headphones to the top of the output priority list.
+3. In **Input**, drag the external USB microphone to the top of the input priority list.
+4. If the Bluetooth headset microphone appears in **Input**, use its row menu and choose **Never use as input**, or leave it below the external microphone as a fallback.
+5. Leave built-in Mac devices lower in their input/output lists so they remain available as fallbacks.
+6. If a display, dock, or audio interface exposes both input and output, configure each role separately from its own row/list.
 
 ### Managing Priorities
 
-- **Click a device**: Moves it to #1 priority (in normal mode) or just selects it (in custom mode)
+- **Click a device**: When Auto-switch is on for that role, moves the device to #1 priority and selects it. When Auto-switch is off or all automation is paused, selects it without changing saved priority.
 - **Drag devices**: Reorder by dragging the handle
-- **Up/Down arrows**: Fine-tune order on hover
 
 ### Device Actions (hover menu)
 
-- **Move to Speakers/Headphones**: Change device category
-- **Ignore as [category]**: Hide from current category only
-- **Ignore entirely**: Hide from both speaker and headphone lists
+- **Ignore as input/output**: Hide the device and exclude it from automatic selection for that role
+- **Never use as input/output**: Keep the device visible, but skip it when auto-selecting that role
+- **Allow auto-use as input/output**: Let the app automatically select that role for the device again
 - **Forget Device**: Remove disconnected device from memory
+
+### Automation controls
+
+- **Output Auto-switch**: Controls automatic Output selection only.
+- **Input Auto-switch**: Controls automatic Input selection only.
+- **Pause all auto-switching**: Temporarily stops both Output and Input automation without changing either role's setting. Resume restores the same role settings.
+
+Each device list scrolls independently when it contains more devices than fit in the menu. Section controls and the footer stay visible.
 
 ### Edit Mode
 
 Click "Edit" in the footer to:
 - See all devices ever connected (disconnected ones grayed out)
+- See ignored devices and stop ignoring them
+- Change Auto-use eligibility for connected or remembered devices
 - Reorder disconnected devices in the priority list
 - View "last seen" timestamps
 - Forget old devices you no longer use
@@ -82,9 +101,17 @@ Click "Edit" in the footer to:
 ## How It Works
 
 1. **Device Discovery**: Uses CoreAudio to enumerate audio devices and listen for changes.
-2. **Priority Storage**: Device priorities are stored in UserDefaults, keyed by device UID (stable across reconnects).
-3. **Auto-Switching**: When devices connect/disconnect, the app automatically selects the highest-priority available device for the current mode.
-4. **Categories**: Each output device is assigned to either "speaker" or "headphone" category, with separate priority lists.
+2. **Priority Storage**: Device priorities are stored in UserDefaults, keyed by CoreAudio device UID (stable across reconnects).
+3. **Role-Specific Auto-Use**: Input and output auto-use settings are stored separately, so disabling automatic input use does not disable output use for the same device.
+4. **Auto-Switching**: When devices connect/disconnect, each enabled role automatically selects its highest-priority connected device that is neither ignored nor set to Auto-use off, unless all automation is paused.
+
+When upgrading from an older version with global "Never Use" settings, those devices are migrated to auto-use off for both input and output to preserve prior behavior. You can then allow auto-use for input or output independently from the device row menu.
+
+When upgrading from an older version with separate speaker and headphone output priority lists, those lists are merged into one Output priority list. The list for the previously active mode is placed first, followed by the other list, with duplicates removed. A missing or invalid legacy mode uses the older app's default Speakers mode. Existing unified Output priorities remain authoritative, and all legacy keys are left in place.
+
+Older Custom/Manual automation settings are migrated to the new role controls while preserving their effective behavior. Legacy preference keys remain in place.
+
+On a new install, the app waits for you to set a priority list before auto-selecting a role. This avoids changing the current macOS input or output based only on CoreAudio enumeration order.
 
 ## Project Structure
 
@@ -92,11 +119,12 @@ Click "Edit" in the footer to:
 AudioPriorityBar/
 ├── AudioPriorityBarApp.swift    # App entry, MenuBarExtra, AudioManager
 ├── Models/
-│   └── AudioDevice.swift        # Device model, OutputCategory enum
+│   └── AudioDevice.swift        # Device model
 ├── Services/
 │   ├── AudioDeviceService.swift # CoreAudio wrapper
 │   └── PriorityManager.swift    # Priority persistence
 └── Views/
+    ├── AdaptiveDeviceListLayout.swift # Screen-bounded list height allocation
     ├── MenuBarView.swift        # Main popover UI
     └── DeviceListView.swift     # Device list and row components
 ```

@@ -6,25 +6,6 @@ enum AudioDeviceType: String, Codable {
     case output
 }
 
-enum OutputCategory: String, Codable, CaseIterable {
-    case speaker
-    case headphone
-
-    var icon: String {
-        switch self {
-        case .speaker: return "speaker.wave.2.fill"
-        case .headphone: return "headphones"
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .speaker: return "Speakers"
-        case .headphone: return "Headphones"
-        }
-    }
-}
-
 struct AudioDevice: Identifiable, Equatable, Hashable {
     let id: AudioObjectID
     let uid: String
@@ -34,6 +15,10 @@ struct AudioDevice: Identifiable, Equatable, Hashable {
 
     var isValid: Bool {
         id != kAudioObjectUnknown
+    }
+
+    var roleIdentifier: String {
+        "\(type.rawValue):\(uid)"
     }
 
     // Create a disconnected placeholder from stored device

@@ -32,16 +32,37 @@ struct StoredDevice: Codable, Equatable {
 }
 
 class PriorityManager {
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
     private let inputPrioritiesKey = "inputPriorities"
+    private let outputPrioritiesKey = "outputPriorities"
     private let speakerPrioritiesKey = "speakerPriorities"
     private let headphonePrioritiesKey = "headphonePriorities"
-    private let deviceCategoriesKey = "deviceCategories"
     private let currentModeKey = "currentMode"
     private let customModeKey = "customMode"
-    private let hiddenDevicesKey = "hiddenDevices"
+    private let outputAutoSwitchEnabledKey = "outputAutoSwitchEnabled"
+    private let inputAutoSwitchEnabledKey = "inputAutoSwitchEnabled"
+    private let globalAutoSwitchPausedKey = "globalAutoSwitchPaused"
+    private let automationSettingsMigrationKey = "automationSettingsMigration_v1"
     private let knownDevicesKey = "knownDevices"
+    private let legacyNeverUseKey = "neverUseDevices"
+    private let inputAutoUseDisabledKey = "inputAutoUseDisabledDevices"
+    private let outputAutoUseDisabledKey = "outputAutoUseDisabledDevices"
+    private let roleSpecificAutoUseMigrationKey = "roleSpecificAutoUseMigration_v1"
+    private let hiddenOutputsKey = "hiddenOutputs"
+    private let hiddenMicsKey = "hiddenMics"
+    private let hiddenSpeakersKey = "hiddenSpeakers"
+    private let hiddenHeadphonesKey = "hiddenHeadphones"
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let hadUnifiedOutputPriorities = defaults.object(forKey: outputPrioritiesKey) != nil
+
+        migrateLegacyNeverUseDevicesIfNeeded()
+        migrateAutomationSettingsIfNeeded(hadUnifiedOutputPriorities: hadUnifiedOutputPriorities)
+        migrateUnifiedOutputPrioritiesIfNeeded()
+        migrateUnifiedHiddenOutputsIfNeeded()
+    }
 
     // MARK: - Known Devices (Persistent Memory)
 
@@ -56,7 +77,7 @@ class PriorityManager {
     func rememberDevice(_ uid: String, name: String, isInput: Bool) {
         var known = getKnownDevices()
         let now = Date()
-        if let index = known.firstIndex(where: { $0.uid == uid }) {
+        if let index = known.firstIndex(where: { $0.uid == uid && $0.isInput == isInput }) {
             // Update name and lastSeen
             known[index] = StoredDevice(uid: uid, name: name, isInput: isInput, lastSeen: now)
         } else {
@@ -65,13 +86,19 @@ class PriorityManager {
         saveKnownDevices(known)
     }
 
-    func getStoredDevice(uid: String) -> StoredDevice? {
-        getKnownDevices().first { $0.uid == uid }
+    func getStoredDevice(for device: AudioDevice) -> StoredDevice? {
+        let isInput = device.type == .input
+        return getKnownDevices().first { $0.uid == device.uid && $0.isInput == isInput }
     }
 
-    func forgetDevice(_ uid: String) {
+    func forgetDevice(_ uid: String, type: AudioDeviceType? = nil) {
         var known = getKnownDevices()
-        known.removeAll { $0.uid == uid }
+        if let type {
+            let isInput = type == .input
+            known.removeAll { $0.uid == uid && $0.isInput == isInput }
+        } else {
+            known.removeAll { $0.uid == uid }
+        }
         saveKnownDevices(known)
     }
 
@@ -81,72 +108,110 @@ class PriorityManager {
         }
     }
 
-    // MARK: - Mode Management
+    // MARK: - Automation Settings
 
-    var currentMode: OutputCategory {
-        get {
-            guard let raw = defaults.string(forKey: currentModeKey),
-                  let mode = OutputCategory(rawValue: raw) else {
-                return .speaker
-            }
-            return mode
-        }
-        set {
-            defaults.set(newValue.rawValue, forKey: currentModeKey)
-        }
+    var isOutputAutoSwitchEnabled: Bool {
+        get { storedBool(forKey: outputAutoSwitchEnabledKey, defaultValue: true) }
+        set { defaults.set(newValue, forKey: outputAutoSwitchEnabledKey) }
     }
 
-    var isCustomMode: Bool {
-        get { defaults.bool(forKey: customModeKey) }
-        set { defaults.set(newValue, forKey: customModeKey) }
+    var isInputAutoSwitchEnabled: Bool {
+        get { storedBool(forKey: inputAutoSwitchEnabledKey, defaultValue: true) }
+        set { defaults.set(newValue, forKey: inputAutoSwitchEnabledKey) }
     }
 
-    // MARK: - Device Categories
-
-    func getCategory(for device: AudioDevice) -> OutputCategory {
-        let categories = defaults.dictionary(forKey: deviceCategoriesKey) as? [String: String] ?? [:]
-        if let raw = categories[device.uid], let category = OutputCategory(rawValue: raw) {
-            return category
-        }
-        // Default headphone-like devices to headphone category
-        if HeadphoneDetection.isHeadphone(deviceName: device.name) {
-            return .headphone
-        }
-        return .speaker
+    var isGlobalAutoSwitchPaused: Bool {
+        get { storedBool(forKey: globalAutoSwitchPausedKey, defaultValue: false) }
+        set { defaults.set(newValue, forKey: globalAutoSwitchPausedKey) }
     }
 
-    func setCategory(_ category: OutputCategory, for device: AudioDevice) {
-        var categories = defaults.dictionary(forKey: deviceCategoriesKey) as? [String: String] ?? [:]
-        categories[device.uid] = category.rawValue
-        defaults.set(categories, forKey: deviceCategoriesKey)
-    }
+    // MARK: - Auto-Use Eligibility
 
-    // MARK: - Never Use Devices (never auto-selected)
-
-    private let neverUseKey = "neverUseDevices"
-
-    func isNeverUse(_ device: AudioDevice) -> Bool {
-        let list = defaults.array(forKey: neverUseKey) as? [String] ?? []
+    func isAutoUseDisabled(_ device: AudioDevice) -> Bool {
+        let list = defaults.array(forKey: autoUseDisabledKey(for: device.type)) as? [String] ?? []
         return list.contains(device.uid)
     }
 
-    func setNeverUse(_ device: AudioDevice, neverUse: Bool) {
-        var list = defaults.array(forKey: neverUseKey) as? [String] ?? []
-        if neverUse {
+    func isEligibleForAutoUse(_ device: AudioDevice) -> Bool {
+        device.isConnected && !isHidden(device) && !isAutoUseDisabled(device)
+    }
+
+    func setAutoUseDisabled(_ device: AudioDevice, disabled: Bool) {
+        let key = autoUseDisabledKey(for: device.type)
+        var list = defaults.array(forKey: key) as? [String] ?? []
+        if disabled {
             if !list.contains(device.uid) {
                 list.append(device.uid)
             }
         } else {
             list.removeAll { $0 == device.uid }
         }
-        defaults.set(list, forKey: neverUseKey)
+        defaults.set(list, forKey: key)
     }
 
-    // MARK: - Hidden Devices (per category)
+    private func autoUseDisabledKey(for type: AudioDeviceType) -> String {
+        switch type {
+        case .input:
+            return inputAutoUseDisabledKey
+        case .output:
+            return outputAutoUseDisabledKey
+        }
+    }
 
-    private let hiddenMicsKey = "hiddenMics"
-    private let hiddenSpeakersKey = "hiddenSpeakers"
-    private let hiddenHeadphonesKey = "hiddenHeadphones"
+    private func migrateLegacyNeverUseDevicesIfNeeded() {
+        guard !defaults.bool(forKey: roleSpecificAutoUseMigrationKey) else { return }
+
+        let legacyList = defaults.array(forKey: legacyNeverUseKey) as? [String] ?? []
+        if !legacyList.isEmpty {
+            appendUnique(legacyList, to: inputAutoUseDisabledKey)
+            appendUnique(legacyList, to: outputAutoUseDisabledKey)
+        }
+
+        defaults.set(true, forKey: roleSpecificAutoUseMigrationKey)
+    }
+
+    private func appendUnique(_ uids: [String], to key: String) {
+        var list = defaults.array(forKey: key) as? [String] ?? []
+        for uid in uids where !list.contains(uid) {
+            list.append(uid)
+        }
+        defaults.set(list, forKey: key)
+    }
+
+    private func migrateAutomationSettingsIfNeeded(hadUnifiedOutputPriorities: Bool) {
+        guard !defaults.bool(forKey: automationSettingsMigrationKey) else { return }
+
+        var outputAutoSwitchEnabled = true
+        let inputAutoSwitchEnabled = true
+        var globalAutoSwitchPaused = false
+
+        if defaults.bool(forKey: customModeKey) {
+            if hadUnifiedOutputPriorities {
+                // The local unified-output build used Custom Mode as an Output-only override.
+                outputAutoSwitchEnabled = false
+            } else {
+                // Upstream used Custom Mode to pause both roles.
+                globalAutoSwitchPaused = true
+            }
+        }
+
+        setBoolIfMissing(outputAutoSwitchEnabled, forKey: outputAutoSwitchEnabledKey)
+        setBoolIfMissing(inputAutoSwitchEnabled, forKey: inputAutoSwitchEnabledKey)
+        setBoolIfMissing(globalAutoSwitchPaused, forKey: globalAutoSwitchPausedKey)
+        defaults.set(true, forKey: automationSettingsMigrationKey)
+    }
+
+    private func storedBool(forKey key: String, defaultValue: Bool) -> Bool {
+        guard defaults.object(forKey: key) != nil else { return defaultValue }
+        return defaults.bool(forKey: key)
+    }
+
+    private func setBoolIfMissing(_ value: Bool, forKey key: String) {
+        guard defaults.object(forKey: key) == nil else { return }
+        defaults.set(value, forKey: key)
+    }
+
+    // MARK: - Hidden Devices (per role)
 
     func isHidden(_ device: AudioDevice) -> Bool {
         let key = hiddenKey(for: device)
@@ -154,23 +219,8 @@ class PriorityManager {
         return hidden.contains(device.uid)
     }
 
-    func isHidden(_ device: AudioDevice, inCategory category: OutputCategory) -> Bool {
-        let key = category == .speaker ? hiddenSpeakersKey : hiddenHeadphonesKey
-        let hidden = defaults.array(forKey: key) as? [String] ?? []
-        return hidden.contains(device.uid)
-    }
-
     func hideDevice(_ device: AudioDevice) {
         let key = hiddenKey(for: device)
-        var hidden = defaults.array(forKey: key) as? [String] ?? []
-        if !hidden.contains(device.uid) {
-            hidden.append(device.uid)
-            defaults.set(hidden, forKey: key)
-        }
-    }
-
-    func hideDevice(_ device: AudioDevice, inCategory category: OutputCategory) {
-        let key = category == .speaker ? hiddenSpeakersKey : hiddenHeadphonesKey
         var hidden = defaults.array(forKey: key) as? [String] ?? []
         if !hidden.contains(device.uid) {
             hidden.append(device.uid)
@@ -185,58 +235,66 @@ class PriorityManager {
         defaults.set(hidden, forKey: key)
     }
 
-    func unhideDevice(_ device: AudioDevice, fromCategory category: OutputCategory) {
-        let key = category == .speaker ? hiddenSpeakersKey : hiddenHeadphonesKey
-        var hidden = defaults.array(forKey: key) as? [String] ?? []
-        hidden.removeAll { $0 == device.uid }
-        defaults.set(hidden, forKey: key)
-    }
-
     private func hiddenKey(for device: AudioDevice) -> String {
-        if device.type == .input {
-            return hiddenMicsKey
-        } else {
-            let category = getCategory(for: device)
-            return category == .speaker ? hiddenSpeakersKey : hiddenHeadphonesKey
-        }
+        device.type == .input ? hiddenMicsKey : hiddenOutputsKey
     }
 
     // MARK: - Priority Management
 
     func sortByPriority(_ devices: [AudioDevice], type: AudioDeviceType) -> [AudioDevice] {
-        let key = priorityKey(for: type, category: nil)
-        return sortDevices(devices, usingKey: key)
-    }
-
-    func sortByPriority(_ devices: [AudioDevice], category: OutputCategory) -> [AudioDevice] {
-        let key = priorityKey(for: .output, category: category)
+        let key = priorityKey(for: type)
         return sortDevices(devices, usingKey: key)
     }
 
     func savePriorities(_ devices: [AudioDevice], type: AudioDeviceType) {
-        let key = priorityKey(for: type, category: nil)
+        let key = priorityKey(for: type)
         savePriorities(devices, key: key)
     }
 
-    func savePriorities(_ devices: [AudioDevice], category: OutputCategory) {
-        let key = priorityKey(for: .output, category: category)
-        savePriorities(devices, key: key)
+    func hasPriorities(type: AudioDeviceType) -> Bool {
+        let key = priorityKey(for: type)
+        return !(defaults.array(forKey: key) as? [String] ?? []).isEmpty
     }
 
     // MARK: - Private Helpers
 
-    private func priorityKey(for type: AudioDeviceType, category: OutputCategory?) -> String {
+    private func priorityKey(for type: AudioDeviceType) -> String {
         switch type {
         case .input:
             return inputPrioritiesKey
         case .output:
-            switch category {
-            case .speaker, .none:
-                return speakerPrioritiesKey
-            case .headphone:
-                return headphonePrioritiesKey
-            }
+            return outputPrioritiesKey
         }
+    }
+
+    private func migrateUnifiedOutputPrioritiesIfNeeded() {
+        guard defaults.object(forKey: outputPrioritiesKey) == nil else { return }
+
+        let headphonePriorities = defaults.array(forKey: headphonePrioritiesKey) as? [String] ?? []
+        let speakerPriorities = defaults.array(forKey: speakerPrioritiesKey) as? [String] ?? []
+        let legacyMode = defaults.string(forKey: currentModeKey)
+        let mergedPriorities = legacyMode == "headphone"
+            ? headphonePriorities + speakerPriorities
+            : speakerPriorities + headphonePriorities
+        defaults.set(unique(mergedPriorities), forKey: outputPrioritiesKey)
+    }
+
+    private func migrateUnifiedHiddenOutputsIfNeeded() {
+        guard defaults.object(forKey: hiddenOutputsKey) == nil else { return }
+
+        let hiddenHeadphones = defaults.array(forKey: hiddenHeadphonesKey) as? [String] ?? []
+        let hiddenSpeakers = defaults.array(forKey: hiddenSpeakersKey) as? [String] ?? []
+        defaults.set(unique(hiddenHeadphones + hiddenSpeakers), forKey: hiddenOutputsKey)
+    }
+
+    private func unique(_ uids: [String]) -> [String] {
+        var seen: Set<String> = []
+        var result: [String] = []
+        for uid in uids where !seen.contains(uid) {
+            seen.insert(uid)
+            result.append(uid)
+        }
+        return result
     }
 
     private func sortDevices(_ devices: [AudioDevice], usingKey key: String) -> [AudioDevice] {

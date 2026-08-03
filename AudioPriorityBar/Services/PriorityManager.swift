@@ -81,6 +81,54 @@ class PriorityManager {
         }
     }
 
+    // MARK: - UID Migration
+    //
+    // Some devices (notably display speakers like the Apple Studio Display,
+    // whose audio UID embeds the DisplayPort/USB connection path) come back
+    // with a DIFFERENT UID after being unplugged or moved to another port.
+    // All settings are keyed by UID, so without migration the device loses
+    // its priority slot, category, and hidden/never-use flags on every replug.
+    // When a "new" UID appears whose name matches a known device that is NOT
+    // currently connected, transfer all settings from the old UID to the new.
+
+    /// Migrates stored settings if `device` looks like a known device that came back with a new UID.
+    func migrateDeviceUIDIfNeeded(for device: AudioDevice, connectedUIDs: Set<String>) {
+        // Already known under this UID -> nothing to do
+        guard getStoredDevice(uid: device.uid) == nil else { return }
+        // Find a known device with the same name that is not currently connected
+        guard let old = getKnownDevices().first(where: {
+            $0.name == device.name && $0.uid != device.uid && !connectedUIDs.contains($0.uid)
+        }) else { return }
+        migrateUID(from: old.uid, to: device.uid)
+    }
+
+    private func migrateUID(from oldUID: String, to newUID: String) {
+        // Priority lists
+        for key in [inputPrioritiesKey, speakerPrioritiesKey, headphonePrioritiesKey] {
+            if var list = defaults.array(forKey: key) as? [String], let idx = list.firstIndex(of: oldUID) {
+                list[idx] = newUID
+                defaults.set(list, forKey: key)
+            }
+        }
+        // Category mapping
+        if var categories = defaults.dictionary(forKey: deviceCategoriesKey) as? [String: String],
+           let category = categories.removeValue(forKey: oldUID) {
+            categories[newUID] = category
+            defaults.set(categories, forKey: deviceCategoriesKey)
+        }
+        // Hidden / never-use flags
+        for key in [neverUseKey, hiddenMicsKey, hiddenSpeakersKey, hiddenHeadphonesKey] {
+            if var list = defaults.array(forKey: key) as? [String], let idx = list.firstIndex(of: oldUID) {
+                list[idx] = newUID
+                defaults.set(list, forKey: key)
+            }
+        }
+        // Known devices: drop the stale entry (rememberDevice will add the new one)
+        var known = getKnownDevices()
+        known.removeAll { $0.uid == oldUID }
+        saveKnownDevices(known)
+    }
+
     // MARK: - Mode Management
 
     var currentMode: OutputCategory {
@@ -242,15 +290,61 @@ class PriorityManager {
     private func sortDevices(_ devices: [AudioDevice], usingKey key: String) -> [AudioDevice] {
         let priorities = defaults.array(forKey: key) as? [String] ?? []
 
-        return devices.sorted { a, b in
-            let indexA = priorities.firstIndex(of: a.uid) ?? Int.max
-            let indexB = priorities.firstIndex(of: b.uid) ?? Int.max
-            return indexA < indexB
+        // Fallback: map device NAME -> priority index via known devices, so a
+        // device that reappeared with a new UID (e.g. Studio Display speakers
+        // after a replug) still lands in its old slot even before migration.
+        var nameIndex: [String: Int] = [:]
+        let known = getKnownDevices()
+        for (idx, uid) in priorities.enumerated() {
+            if let stored = known.first(where: { $0.uid == uid }), nameIndex[stored.name] == nil {
+                nameIndex[stored.name] = idx
+            }
         }
+
+        func priorityIndex(_ device: AudioDevice) -> Int {
+            if let i = priorities.firstIndex(of: device.uid) { return i }
+            if let i = nameIndex[device.name] { return i }
+            return Int.max
+        }
+
+        // Stable sort: Swift's sorted(by:) is not guaranteed stable, so ties
+        // (devices not in the priority list) would otherwise shuffle randomly.
+        return devices.enumerated()
+            .sorted { a, b in
+                let ia = priorityIndex(a.element)
+                let ib = priorityIndex(b.element)
+                if ia != ib { return ia < ib }
+                return a.offset < b.offset
+            }
+            .map { $0.element }
     }
 
     private func savePriorities(_ devices: [AudioDevice], key: String) {
-        let uids = devices.map { $0.uid }
-        defaults.set(uids, forKey: key)
+        let newOrder = devices.map { $0.uid }
+        let stored = defaults.array(forKey: key) as? [String] ?? []
+
+        // Merge instead of overwrite: devices not currently visible (e.g. an
+        // unplugged Studio Display) keep their slot in the stored list instead
+        // of being wiped every time the user reorders the visible devices.
+        let newSet = Set(newOrder)
+        var remaining = newOrder[...]
+        var merged: [String] = []
+        for uid in stored {
+            if newSet.contains(uid) {
+                if let next = remaining.first {
+                    merged.append(next)
+                    remaining = remaining.dropFirst()
+                }
+            } else {
+                merged.append(uid)
+            }
+        }
+        merged.append(contentsOf: remaining)
+
+        // De-dupe, preserving first occurrence
+        var seen = Set<String>()
+        merged = merged.filter { seen.insert($0).inserted }
+
+        defaults.set(merged, forKey: key)
     }
 }

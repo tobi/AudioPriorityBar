@@ -190,6 +190,9 @@ class AudioManager: ObservableObject {
         let allConnectedDevices = deviceService.getDevices()
         connectedDeviceUIDs = Set(allConnectedDevices.map { $0.uid })
         for device in allConnectedDevices {
+            // If this device reappeared with a new UID (Studio Display et al.),
+            // transfer its saved priorities/category/flags to the new UID first.
+            priorityManager.migrateDeviceUIDIfNeeded(for: device, connectedUIDs: connectedDeviceUIDs)
             priorityManager.rememberDevice(device.uid, name: device.name, isInput: device.type == .input)
         }
         let connectedInputs = allConnectedDevices.filter { $0.type == .input }

@@ -89,6 +89,7 @@ class AudioManager: ObservableObject {
     @Published var micFlashState: Bool = false
 
     private let deviceService = AudioDeviceService()
+    private let linkMonitor = WirelessLinkMonitor()
     private var micFlashTimer: Timer?
     let priorityManager = PriorityManager()
     private var connectedDeviceUIDs: Set<String> = []
@@ -167,10 +168,25 @@ class AudioManager: ObservableObject {
         refreshMuteStatus()
         setupDeviceChangeListener()
         setupMuteVolumeListener()
+        setupLinkMonitor()
         if !isCustomMode {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
         }
+    }
+
+    private func setupLinkMonitor() {
+        linkMonitor.onLinkChange = { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.refreshDevices()
+                if !self.isCustomMode {
+                    self.applyHighestPriorityInput()
+                    self.applyHighestPriorityOutput()
+                }
+            }
+        }
+        linkMonitor.start()
     }
 
     private func setupMuteVolumeListener() {
@@ -251,6 +267,13 @@ class AudioManager: ObservableObject {
 
     func isDeviceConnected(_ device: AudioDevice) -> Bool {
         connectedDeviceUIDs.contains(device.uid)
+    }
+
+    /// A dongle that is plugged in but whose headset is not linked to it: present in
+    /// CoreAudio, yet unable to carry audio, so it is skipped when auto-selecting.
+    /// A device with no known link signal is never reported as down.
+    func isLinkDown(_ device: AudioDevice) -> Bool {
+        device.isConnected && !linkMonitor.isUsable(deviceNamed: device.name)
     }
 
     /// Tracks device UIDs from the previous refresh to detect new connections
@@ -396,14 +419,14 @@ class AudioManager: ObservableObject {
     }
 
     private func applyHighestPriorityInput() {
-        if let first = inputDevices.first(where: { $0.isConnected && !priorityManager.isNeverUse($0) }) {
+        if let first = inputDevices.first(where: { $0.isConnected && !priorityManager.isNeverUse($0) && !isLinkDown($0) }) {
             applyInputDevice(first)
         }
     }
 
     private func applyHighestPriorityOutput() {
         let devices = activeOutputDevices
-        if let first = devices.first(where: { $0.isConnected && !priorityManager.isNeverUse($0) }) {
+        if let first = devices.first(where: { $0.isConnected && !priorityManager.isNeverUse($0) && !isLinkDown($0) }) {
             applyOutputDevice(first)
         }
         refreshMuteStatus()

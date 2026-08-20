@@ -114,7 +114,13 @@ struct DraggableDeviceRow: View {
     }
 
     var isGrayed: Bool {
-        isDisconnected || isHiddenSection
+        isDisconnected || isHiddenSection || isLinkDown
+    }
+
+    /// Plugged in, but the wireless headset is not linked to it, so it cannot
+    /// carry audio and is skipped when picking the highest priority device.
+    var isLinkDown: Bool {
+        audioManager.isLinkDown(device)
     }
 
     var isNeverUse: Bool {
@@ -124,6 +130,8 @@ struct DraggableDeviceRow: View {
     var statusIcon: String? {
         if isDisconnected {
             return "wifi.slash"
+        } else if isLinkDown {
+            return "antenna.radiowaves.left.and.right.slash"
         } else if isIgnored && audioManager.isEditMode {
             return "eye.slash"
         } else if isNeverUse {
@@ -138,6 +146,10 @@ struct DraggableDeviceRow: View {
             return nil
         }
         return stored.lastSeenRelative
+    }
+
+    var linkStatusText: String? {
+        isLinkDown ? "not linked" : nil
     }
 
     var isMuted: Bool {
@@ -205,6 +217,12 @@ struct DraggableDeviceRow: View {
 
                 if let lastSeen = lastSeenText {
                     Text(lastSeen)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+
+                if let linkStatus = linkStatusText {
+                    Text(linkStatus)
                         .font(.system(size: 10))
                         .foregroundColor(.secondary.opacity(0.6))
                 }

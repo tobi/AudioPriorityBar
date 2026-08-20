@@ -18,6 +18,7 @@ A native macOS menu bar app that automatically manages audio device priorities. 
 - **Separate speaker/headphone modes**: Output devices are categorized as either speakers or headphones, each with their own priority list.
 - **Manual override**: Enable "Custom" mode (hand icon) to disable auto-switching and select devices freely.
 - **Device memory**: Remembers all devices you've ever connected, even when disconnected. Edit mode shows disconnected devices with "last seen" timestamps.
+- **Wireless link awareness**: A USB headset dongle publishes its audio devices whenever it is plugged in, even when the headset is off. Recognised dongles are skipped while no headset is linked to them, so audio is not sent into a dead link. Devices without a known link signal are unaffected.
 - **Per-category ignore**: Hide devices from specific categories without affecting others.
 - **Drag-to-reorder**: Reorder devices by dragging or using up/down arrows.
 - **Volume control**: Adjust volume with slider or scroll wheel.
@@ -85,6 +86,7 @@ Click "Edit" in the footer to:
 2. **Priority Storage**: Device priorities are stored in UserDefaults, keyed by device UID (stable across reconnects).
 3. **Auto-Switching**: When devices connect/disconnect, the app automatically selects the highest-priority available device for the current mode.
 4. **Categories**: Each output device is assigned to either "speaker" or "headphone" category, with separate priority lists.
+5. **Link Checking**: For dongles listed in `WirelessLinkMonitor.knownDongles`, an HID bit reports whether the headset is actually linked. CoreAudio cannot tell: it reports the dongle as alive with the same channels, sample rates and stream formats either way. A device with no known link signal is always treated as usable.
 
 ## Project Structure
 
@@ -95,7 +97,8 @@ AudioPriorityBar/
 │   └── AudioDevice.swift        # Device model, OutputCategory enum
 ├── Services/
 │   ├── AudioDeviceService.swift # CoreAudio wrapper
-│   └── PriorityManager.swift    # Priority persistence
+│   ├── PriorityManager.swift    # Priority persistence
+│   └── WirelessLinkMonitor.swift # HID headset-link detection for USB dongles
 └── Views/
     ├── MenuBarView.swift        # Main popover UI
     └── DeviceListView.swift     # Device list and row components

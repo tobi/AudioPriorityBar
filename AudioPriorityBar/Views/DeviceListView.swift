@@ -229,94 +229,79 @@ struct DraggableDeviceRow: View {
             }
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
 
-            // Actions menu - always reserve space to prevent layout shifts
-            ZStack {
-                // Invisible placeholder to reserve space
+            Menu {
+                if showCategoryPicker {
+                    Button {
+                        audioManager.setCategory(.speaker, for: device)
+                    } label: {
+                        Label("Move to Speakers", systemImage: "speaker.wave.2.fill")
+                    }
+                    Button {
+                        audioManager.setCategory(.headphone, for: device)
+                    } label: {
+                        Label("Move to Headphones", systemImage: "headphones")
+                    }
+                    Divider()
+                }
+
+                if isHiddenSection || isIgnored {
+                    Button {
+                        audioManager.unhideDevice(device)
+                    } label: {
+                        Label("Stop Ignoring", systemImage: "eye")
+                    }
+                } else {
+                    if let onHide {
+                        Button {
+                            onHide(device)
+                        } label: {
+                            let categoryLabel = device.type == .input ? "microphone" :
+                                (category == .headphone ? "headphone" : "speaker")
+                            Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
+                        }
+
+                        if device.type == .output {
+                            Button {
+                                audioManager.hideDeviceEntirely(device)
+                            } label: {
+                                Label("Ignore entirely", systemImage: "eye.slash.fill")
+                            }
+                        }
+                    }
+                }
+
+                if isDisconnected {
+                    Divider()
+                    Button(role: .destructive) {
+                        audioManager.priorityManager.forgetDevice(device.uid)
+                        audioManager.refreshDevices()
+                    } label: {
+                        Label("Forget Device", systemImage: "trash")
+                    }
+                }
+
+                if device.isConnected {
+                    Divider()
+                    Button {
+                        audioManager.setNeverUse(device, neverUse: !audioManager.isNeverUse(device))
+                    } label: {
+                        if audioManager.isNeverUse(device) {
+                            Label("Allow Use", systemImage: "checkmark.circle")
+                        } else {
+                            Label("Never Use", systemImage: "nosign")
+                        }
+                    }
+                }
+            } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.system(size: 14))
+                    .foregroundColor(.secondary)
                     .frame(width: 28, height: 28)
-                    .opacity(0)
-                
-                // Actual menu (shown on hover)
-                if isHovering && !isDragging {
-                    Group {
-                    Menu {
-                    if showCategoryPicker {
-                        Button {
-                            audioManager.setCategory(.speaker, for: device)
-                        } label: {
-                            Label("Move to Speakers", systemImage: "speaker.wave.2.fill")
-                        }
-                        Button {
-                            audioManager.setCategory(.headphone, for: device)
-                        } label: {
-                            Label("Move to Headphones", systemImage: "headphones")
-                        }
-                        Divider()
-                    }
-
-                    if isHiddenSection || isIgnored {
-                        Button {
-                            audioManager.unhideDevice(device)
-                        } label: {
-                            Label("Stop Ignoring", systemImage: "eye")
-                        }
-                    } else {
-                        if let onHide {
-                            Button {
-                                onHide(device)
-                            } label: {
-                                let categoryLabel = device.type == .input ? "microphone" :
-                                    (category == .headphone ? "headphone" : "speaker")
-                                Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
-                            }
-
-                            if device.type == .output {
-                                Button {
-                                    audioManager.hideDeviceEntirely(device)
-                                } label: {
-                                    Label("Ignore entirely", systemImage: "eye.slash.fill")
-                                }
-                            }
-                        }
-                    }
-
-                    if isDisconnected {
-                        Divider()
-                        Button(role: .destructive) {
-                            audioManager.priorityManager.forgetDevice(device.uid)
-                            audioManager.refreshDevices()
-                        } label: {
-                            Label("Forget Device", systemImage: "trash")
-                        }
-                    }
-
-                    if device.isConnected {
-                        Divider()
-                        Button {
-                            audioManager.setNeverUse(device, neverUse: !audioManager.isNeverUse(device))
-                        } label: {
-                            if audioManager.isNeverUse(device) {
-                                Label("Allow Use", systemImage: "checkmark.circle")
-                            } else {
-                                Label("Never Use", systemImage: "nosign")
-                            }
-                        }
-                    }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .menuStyle(.borderlessButton)
-                    }
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                }
+                    .contentShape(Rectangle())
             }
+            .menuStyle(.borderlessButton)
             .frame(width: 32)
-            .animation(.easeInOut(duration: 0.12), value: isHovering)
+            .opacity(isDragging ? 0.3 : 1)
         }
         .padding(.leading, 8)
         .padding(.trailing, 10)

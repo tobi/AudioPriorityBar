@@ -19,70 +19,70 @@ struct MenuBarView: View {
             Divider()
                 .padding(.horizontal, 12)
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Speakers (show in speaker mode or custom mode)
-                    if audioManager.currentMode == .speaker || audioManager.isCustomMode {
-                        DeviceSectionView(
-                            title: "Speakers",
-                            icon: "speaker.wave.2.fill",
-                            devices: audioManager.speakerDevices,
-                            currentDeviceId: audioManager.currentOutputId,
-                            onMove: audioManager.moveSpeakerDevice,
-                            onSelect: { device in
-                                if !audioManager.isCustomMode {
-                                    audioManager.setMode(.speaker)
-                                }
-                                audioManager.setOutputDevice(device)
-                            },
-                            onHide: { audioManager.hideDevice($0, category: .speaker) },
-                            onUnhide: { audioManager.unhideDevice($0, category: .speaker) },
-                            category: .speaker,
-                            showCategoryPicker: true,
-                            isActiveCategory: audioManager.currentMode == .speaker || audioManager.isCustomMode
-                        )
-                    }
-
-                    // Headphones (show in headphone mode or custom mode)
-                    if audioManager.currentMode == .headphone || audioManager.isCustomMode {
-                        DeviceSectionView(
-                            title: "Headphones",
-                            icon: "headphones",
-                            devices: audioManager.headphoneDevices,
-                            currentDeviceId: audioManager.currentOutputId,
-                            onMove: audioManager.moveHeadphoneDevice,
-                            onSelect: { device in
-                                if !audioManager.isCustomMode {
-                                    audioManager.setMode(.headphone)
-                                }
-                                audioManager.setOutputDevice(device)
-                            },
-                            onHide: { audioManager.hideDevice($0, category: .headphone) },
-                            onUnhide: { audioManager.unhideDevice($0, category: .headphone) },
-                            category: .headphone,
-                            showCategoryPicker: true,
-                            isActiveCategory: audioManager.currentMode == .headphone || audioManager.isCustomMode
-                        )
-                    }
-
-                    // Microphones (always shown, at the bottom)
+            // Do not wrap this in a ScrollView: MenuBarExtra windows give
+            // ScrollView an ideal height of 0, so the device lists vanish.
+            VStack(spacing: 20) {
+                // Speakers (show in speaker mode or custom mode)
+                if audioManager.currentMode == .speaker || audioManager.isCustomMode {
                     DeviceSectionView(
-                        title: "Microphones",
-                        icon: "mic.fill",
-                        devices: audioManager.inputDevices,
-                        currentDeviceId: audioManager.currentInputId,
-                        onMove: audioManager.moveInputDevice,
-                        onSelect: audioManager.setInputDevice,
-                        onHide: { audioManager.hideDevice($0, category: nil) },
-                        onUnhide: { audioManager.unhideDevice($0, category: nil) },
-                        category: nil,
-                        showCategoryPicker: false
+                        title: "Speakers",
+                        icon: "speaker.wave.2.fill",
+                        devices: audioManager.speakerDevices,
+                        currentDeviceId: audioManager.currentOutputId,
+                        onMove: audioManager.moveSpeakerDevice,
+                        onSelect: { device in
+                            if !audioManager.isCustomMode {
+                                audioManager.setMode(.speaker)
+                            }
+                            audioManager.setOutputDevice(device)
+                        },
+                        onHide: { audioManager.hideDevice($0, category: .speaker) },
+                        onUnhide: { audioManager.unhideDevice($0, category: .speaker) },
+                        category: .speaker,
+                        showCategoryPicker: true,
+                        isActiveCategory: audioManager.currentMode == .speaker || audioManager.isCustomMode
                     )
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+
+                // Headphones (show in headphone mode or custom mode)
+                if audioManager.currentMode == .headphone || audioManager.isCustomMode {
+                    DeviceSectionView(
+                        title: "Headphones",
+                        icon: "headphones",
+                        devices: audioManager.headphoneDevices,
+                        currentDeviceId: audioManager.currentOutputId,
+                        onMove: audioManager.moveHeadphoneDevice,
+                        onSelect: { device in
+                            if !audioManager.isCustomMode {
+                                audioManager.setMode(.headphone)
+                            }
+                            audioManager.setOutputDevice(device)
+                        },
+                        onHide: { audioManager.hideDevice($0, category: .headphone) },
+                        onUnhide: { audioManager.unhideDevice($0, category: .headphone) },
+                        category: .headphone,
+                        showCategoryPicker: true,
+                        isActiveCategory: audioManager.currentMode == .headphone || audioManager.isCustomMode
+                    )
+                }
+
+                // Microphones (always shown, at the bottom)
+                DeviceSectionView(
+                    title: "Microphones",
+                    icon: "mic.fill",
+                    devices: audioManager.inputDevices,
+                    currentDeviceId: audioManager.currentInputId,
+                    onMove: audioManager.moveInputDevice,
+                    onSelect: audioManager.setInputDevice,
+                    onHide: { audioManager.hideDevice($0, category: nil) },
+                    onUnhide: { audioManager.unhideDevice($0, category: nil) },
+                    category: nil,
+                    showCategoryPicker: false
+                )
             }
-            .frame(maxHeight: 420)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
                 .padding(.horizontal, 12)

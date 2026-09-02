@@ -36,6 +36,13 @@ struct AudioDevice: Identifiable, Equatable, Hashable {
         id != kAudioObjectUnknown
     }
 
+    // Jabra Link dongles keep their audio device present even when the wireless
+    // headset is off/out of range, so CoreAudio never signals a disconnect.
+    // JabraHIDMonitor watches the HID link-state bit for these instead.
+    var isJabra: Bool {
+        name.range(of: "Jabra", options: .caseInsensitive) != nil
+    }
+
     // Create a disconnected placeholder from stored device
     static func disconnected(uid: String, name: String, type: AudioDeviceType) -> AudioDevice {
         AudioDevice(id: 0, uid: uid, name: name, type: type, isConnected: false)

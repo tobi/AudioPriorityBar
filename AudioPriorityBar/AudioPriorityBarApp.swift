@@ -87,8 +87,11 @@ class AudioManager: ObservableObject {
     @Published var isActiveOutputMuted: Bool = false
     @Published var isActiveInputMuted: Bool = false
     @Published var micFlashState: Bool = false
+    /// False when a Jabra Link headset is powered off / out of range (dongle stays plugged).
+    @Published var jabraHeadsetLive: Bool = true
 
     private let deviceService = AudioDeviceService()
+    private let jabraMonitor = JabraHIDMonitor()
     private var micFlashTimer: Timer?
     let priorityManager = PriorityManager()
     private var connectedDeviceUIDs: Set<String> = []
@@ -167,6 +170,7 @@ class AudioManager: ObservableObject {
         refreshMuteStatus()
         setupDeviceChangeListener()
         setupMuteVolumeListener()
+        setupJabraMonitor()
         if !isCustomMode {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
@@ -186,8 +190,25 @@ class AudioManager: ObservableObject {
         refreshVolume()
     }
 
+    private func setupJabraMonitor() {
+        jabraMonitor.onHeadsetLiveChanged = { [weak self] live in
+            guard let self else { return }
+            self.jabraHeadsetLive = live
+            // Headset off reads as a disconnect, on as a reconnect: reuse the
+            // same priority path CoreAudio device changes already go through.
+            self.handleDeviceChange()
+        }
+        jabraMonitor.start()
+        jabraHeadsetLive = jabraMonitor.isHeadsetLive
+    }
+
     func refreshDevices() {
-        let allConnectedDevices = deviceService.getDevices()
+        var allConnectedDevices = deviceService.getDevices()
+        // A Jabra Link dongle stays present when its headset powers off, so treat
+        // the whole Jabra device as disconnected while the HID link is down.
+        if !jabraHeadsetLive {
+            allConnectedDevices = allConnectedDevices.filter { !$0.isJabra }
+        }
         connectedDeviceUIDs = Set(allConnectedDevices.map { $0.uid })
         for device in allConnectedDevices {
             priorityManager.rememberDevice(device.uid, name: device.name, isInput: device.type == .input)

@@ -82,7 +82,6 @@ struct MenuBarView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
             }
-            .frame(maxHeight: 420)
 
             Divider()
                 .padding(.horizontal, 12)
@@ -133,6 +132,12 @@ struct MenuBarView: View {
             .animation(.easeInOut(duration: 0.2), value: audioManager.isEditMode)
         }
         .frame(width: 340)
+        // macOS 26 (Tahoe): a ScrollView reports 0 ideal height, so a plain
+        // maxHeight on it collapses the fit-to-content MenuBarExtra window down
+        // to just the header and footer. Size the window to its content instead,
+        // capped so a long device list scrolls rather than running off-screen.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxHeight: 650)
     }
 }
 

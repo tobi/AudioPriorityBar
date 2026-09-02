@@ -145,14 +145,15 @@ struct DraggableDeviceRow: View {
     }
     
     private func calculateTarget(offset: CGFloat) -> Int? {
-        let rowsOffset = Int(round(offset / rowHeight))
-        var newTarget = index + rowsOffset
-        newTarget = max(0, min(deviceCount, newTarget))
-        
-        if newTarget == index || newTarget == index + 1 {
-            return nil
-        }
-        return newTarget
+        let pitch = rowHeight + 4  // row height + VStack spacing
+        // Flip as soon as the dragged centre crosses a neighbour's midpoint,
+        // rather than requiring a ~1.5-row overshoot before reordering.
+        let rowsMoved = Int((offset / pitch).rounded())
+        if rowsMoved == 0 { return nil }
+        // Dragging down inserts *after* the rows crossed, hence the +1.
+        let raw = rowsMoved > 0 ? index + rowsMoved + 1 : index + rowsMoved
+        let target = max(0, min(deviceCount, raw))
+        return (target == index || target == index + 1) ? nil : target
     }
 
     var body: some View {

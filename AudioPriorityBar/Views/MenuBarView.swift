@@ -4,6 +4,8 @@ import AppKit
 
 struct MenuBarView: View {
     @EnvironmentObject var audioManager: AudioManager
+    var availableHeight: CGFloat? = nil
+    @State private var screenHeight = NSScreen.main?.visibleFrame.height ?? 600
 
     var body: some View {
         VStack(spacing: 0) {
@@ -82,7 +84,8 @@ struct MenuBarView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
             }
-            .frame(height: 420)
+            // Reserve space for the fixed header/footer and the screen edge.
+            .frame(height: max(1, min(420, (availableHeight ?? screenHeight) - 160)))
 
             Divider()
                 .padding(.horizontal, 12)
@@ -133,6 +136,48 @@ struct MenuBarView: View {
             .animation(.easeInOut(duration: 0.2), value: audioManager.isEditMode)
         }
         .frame(width: 340)
+        .background(PopoverScreenHeight { screenHeight = $0 })
+    }
+}
+
+// Use the popover's own display, including when it is on a secondary screen.
+private struct PopoverScreenHeight: NSViewRepresentable {
+    var onChange: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ScreenView {
+        let view = ScreenView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateNSView(_ view: ScreenView, context: Context) {
+        view.onChange = onChange
+    }
+
+    final class ScreenView: NSView {
+        var onChange: ((CGFloat) -> Void)?
+        private var observers: [NSObjectProtocol] = []
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers = []
+            guard let window else { return }
+            for name in [NSWindow.didChangeScreenNotification, NSApplication.didChangeScreenParametersNotification] {
+                observers.append(NotificationCenter.default.addObserver(forName: name,
+                    object: name == NSWindow.didChangeScreenNotification ? window : nil, queue: .main) { [weak self] _ in
+                    self?.reportHeight()
+                })
+            }
+            reportHeight()
+        }
+
+        private func reportHeight() {
+            guard let height = window?.screen?.visibleFrame.height else { return }
+            DispatchQueue.main.async { [weak self] in self?.onChange?(height) }
+        }
+
+        deinit { observers.forEach(NotificationCenter.default.removeObserver) }
     }
 }
 

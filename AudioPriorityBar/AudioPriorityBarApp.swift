@@ -88,6 +88,54 @@ class AudioManager: ObservableObject {
     @Published var isActiveInputMuted: Bool = false
     @Published var micFlashState: Bool = false
 
+    @Published private(set) var allMicrophones: [AudioDevice] = []
+    @Published private(set) var microphoneClassifications: [String: MicrophoneClassification] = [:]
+    @Published private(set) var lidState = LidStateMonitor.readState()
+    @Published private(set) var microphoneSelectionStatus = "Uses device priority order."
+    private let microphoneStore = MicrophoneSettingsStore()
+    private let lidMonitor = LidStateMonitor()
+
+    var microphoneSettings: MicrophoneSettings { microphoneStore.settings }
+
+    var microphoneStatus: String {
+        if isCustomMode { return "Manual mode: automatic switching is paused." }
+        return microphoneSettings.enabled ? microphoneSelectionStatus : "Uses device priority order."
+    }
+
+    var microphonesForSettings: [AudioDevice] {
+        var result = allMicrophones
+        var seen = Set(result.map(\.uid))
+        for stored in priorityManager.getKnownDevices() where stored.isInput && seen.insert(stored.uid).inserted {
+            result.append(.disconnected(uid: stored.uid, name: stored.name, type: .input))
+        }
+        return priorityManager.sortByPriority(result, type: .input)
+    }
+
+    func microphoneClassification(for device: AudioDevice) -> MicrophoneClassification {
+        microphoneClassifications[device.uid] ?? .init(role: .unknown,
+            reason: "Connect this device to detect its type.")
+    }
+
+    func updateMicrophoneSettings(_ settings: MicrophoneSettings) {
+        objectWillChange.send()
+        microphoneStore.save(settings)
+        lidState = LidStateMonitor.readState()
+        lidMonitor.setEnabled(microphoneSettings.enabled)
+        if !isCustomMode { applyHighestPriorityInput() }
+    }
+
+    func refreshLidState() {
+        lidState = LidStateMonitor.readState()
+    }
+
+    func forgetDevice(_ device: AudioDevice) {
+        priorityManager.forgetDevice(device.uid)
+        var settings = microphoneSettings
+        settings.overrides.removeValue(forKey: device.uid)
+        microphoneStore.save(settings)
+        microphoneClassifications.removeValue(forKey: device.uid)
+    }
+
     private let deviceService = AudioDeviceService()
     private var micFlashTimer: Timer?
     let priorityManager = PriorityManager()
@@ -167,6 +215,14 @@ class AudioManager: ObservableObject {
         refreshMuteStatus()
         setupDeviceChangeListener()
         setupMuteVolumeListener()
+        lidMonitor.onChange = { [weak self] state in
+            guard let self else { return }
+            self.lidState = state
+            if self.microphoneSettings.enabled && !self.isCustomMode {
+                self.applyHighestPriorityInput()
+            }
+        }
+        lidMonitor.setEnabled(microphoneSettings.enabled)
         if !isCustomMode {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
@@ -194,6 +250,11 @@ class AudioManager: ObservableObject {
         }
         let connectedInputs = allConnectedDevices.filter { $0.type == .input }
         let connectedOutputs = allConnectedDevices.filter { $0.type == .output }
+        allMicrophones = connectedInputs
+        for device in connectedInputs {
+            microphoneClassifications[device.uid] = MicrophoneClassifier.classify(
+                name: device.name, metadata: device.microphoneMetadata)
+        }
 
         if isEditMode {
             let knownDevices = priorityManager.getKnownDevices()
@@ -353,10 +414,8 @@ class AudioManager: ObservableObject {
     func moveInputDevice(from source: IndexSet, to destination: Int) {
         inputDevices.move(fromOffsets: source, toOffset: destination)
         priorityManager.savePriorities(inputDevices, type: .input)
-        // Switch to top input if it's connected
-        if let topInput = inputDevices.first, topInput.isConnected {
-            applyInputDevice(topInput)
-        }
+        // Device priority breaks ties within a role. Reordering must not bypass rules or manual mode.
+        if !isCustomMode { applyHighestPriorityInput() }
     }
 
     func moveSpeakerDevice(from source: IndexSet, to destination: Int) {
@@ -387,7 +446,7 @@ class AudioManager: ObservableObject {
 
     private func applyInputDevice(_ device: AudioDevice) {
         deviceService.setDefaultDevice(device.id, type: .input)
-        currentInputId = device.id
+        currentInputId = deviceService.getCurrentDefaultDevice(type: .input)
     }
 
     private func applyOutputDevice(_ device: AudioDevice) {
@@ -396,9 +455,21 @@ class AudioManager: ObservableObject {
     }
 
     private func applyHighestPriorityInput() {
-        if let first = inputDevices.first(where: { $0.isConnected && !priorityManager.isNeverUse($0) }) {
-            applyInputDevice(first)
+        guard !isCustomMode else { return }
+        let candidates = inputDevices.filter {
+            !priorityManager.isNeverUse($0) && !priorityManager.isHidden($0)
         }
+        guard let selected = MicrophoneSelection.choose(candidates: candidates,
+            settings: microphoneSettings, classifications: microphoneClassifications, lid: lidState) else {
+            microphoneSelectionStatus = "No eligible microphone. Current input is unchanged."
+            return
+        }
+        if deviceService.getCurrentDefaultDevice(type: .input) != selected.id {
+            applyInputDevice(selected)
+        }
+        currentInputId = deviceService.getCurrentDefaultDevice(type: .input)
+        microphoneSelectionStatus = currentInputId == selected.id
+            ? "Selected: \(selected.name)" : "Could not select \(selected.name)."
     }
 
     private func applyHighestPriorityOutput() {

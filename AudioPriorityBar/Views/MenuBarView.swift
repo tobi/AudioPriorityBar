@@ -7,6 +7,19 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Button("Microphone automation…") {
+                    MicrophoneSettingsWindow.shared.show(audioManager: audioManager)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .accessibilityIdentifier("microphone-automation-settings")
+                Text(audioManager.microphoneStatus)
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            Divider()
             // Header with mode toggle and volume
             VStack(spacing: 14) {
                 ModeToggleView()
@@ -82,7 +95,7 @@ struct MenuBarView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
             }
-            .frame(maxHeight: 420)
+            .frame(height: 420)
 
             Divider()
                 .padding(.horizontal, 12)

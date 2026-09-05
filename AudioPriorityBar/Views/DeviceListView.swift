@@ -284,7 +284,7 @@ struct DraggableDeviceRow: View {
                     if isDisconnected {
                         Divider()
                         Button(role: .destructive) {
-                            audioManager.priorityManager.forgetDevice(device.uid)
+                            audioManager.forgetDevice(device)
                             audioManager.refreshDevices()
                         } label: {
                             Label("Forget Device", systemImage: "trash")

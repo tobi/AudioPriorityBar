@@ -17,6 +17,10 @@
 		A10000000000000000000009 /* Headphones.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* Headphones.swift */; };
 		A10000000000000000000010 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* CoreAudio.framework */; };
 		A10000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* Assets.xcassets */; };
+		A10000000000000000000021 /* MicrophoneAutomation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* MicrophoneAutomation.swift */; };
+		A10000000000000000000022 /* MicrophoneSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* MicrophoneSettingsStore.swift */; };
+		A10000000000000000000023 /* LidStateMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* LidStateMonitor.swift */; };
+		A10000000000000000000024 /* MicrophoneSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* MicrophoneSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +36,10 @@
 		A20000000000000000000010 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		A20000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A30000000000000000000001 /* AudioPriorityBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioPriorityBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000021 /* MicrophoneAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneAutomation.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* MicrophoneSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneSettingsStore.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* LidStateMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LidStateMonitor.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* MicrophoneSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneSettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +79,7 @@
 		A50000000000000000000003 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				A20000000000000000000021 /* MicrophoneAutomation.swift */,
 				A20000000000000000000002 /* AudioDevice.swift */,
 				A20000000000000000000009 /* Headphones.swift */,
 			);
@@ -80,6 +89,8 @@
 		A50000000000000000000004 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				A20000000000000000000023 /* LidStateMonitor.swift */,
+				A20000000000000000000022 /* MicrophoneSettingsStore.swift */,
 				A20000000000000000000003 /* AudioDeviceService.swift */,
 				A20000000000000000000004 /* PriorityManager.swift */,
 				A20000000000000000000008 /* LaunchAtLoginManager.swift */,
@@ -90,6 +101,7 @@
 		A50000000000000000000005 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				A20000000000000000000024 /* MicrophoneSettingsView.swift */,
 				A20000000000000000000005 /* MenuBarView.swift */,
 				A20000000000000000000006 /* DeviceListView.swift */,
 			);
@@ -181,6 +193,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000024 /* MicrophoneSettingsView.swift in Sources */,
+				A10000000000000000000023 /* LidStateMonitor.swift in Sources */,
+				A10000000000000000000022 /* MicrophoneSettingsStore.swift in Sources */,
+				A10000000000000000000021 /* MicrophoneAutomation.swift in Sources */,
 				A10000000000000000000001 /* AudioPriorityBarApp.swift in Sources */,
 				A10000000000000000000002 /* AudioDevice.swift in Sources */,
 				A10000000000000000000009 /* Headphones.swift in Sources */,

@@ -9,6 +9,7 @@ class AudioDeviceService {
     private var listenerBlock: AudioObjectPropertyListenerBlock?
     private var muteVolumeListenerBlock: AudioObjectPropertyListenerBlock?
     private var monitoredDeviceIds: Set<AudioObjectID> = []
+    private var inputMetadataCache: [AudioObjectID: (uid: String, value: MicrophoneMetadata)] = [:]
 
     func getDevices() -> [AudioDevice] {
         var propertyAddress = AudioObjectPropertyAddress(
@@ -53,6 +54,10 @@ class AudioDeviceService {
             }
         }
 
+        // Default-route notifications also enumerate devices. Their hardware metadata
+        // is stable until disconnect; avoid repeatedly querying remote audio drivers.
+        let connectedInputs = Set(devices.filter { $0.type == .input }.map(\.id))
+        inputMetadataCache = inputMetadataCache.filter { connectedInputs.contains($0.key) }
         return devices
     }
 
@@ -442,7 +447,48 @@ class AudioDeviceService {
         guard let name = getDeviceName(id: id) else { return nil }
         guard let uid = getDeviceUID(id: id) else { return nil }
 
-        return AudioDevice(id: id, uid: uid, name: name, type: type)
+        var device = AudioDevice(id: id, uid: uid, name: name, type: type)
+        if type == .input {
+            if let cached = inputMetadataCache[id], cached.uid == uid {
+                device.microphoneMetadata = cached.value
+            } else {
+                let metadata = microphoneMetadata(for: id)
+                inputMetadataCache[id] = (uid: uid, value: metadata)
+                device.microphoneMetadata = metadata
+            }
+        }
+        return device
+    }
+
+    // Metadata only: no capture session or microphone permission is needed.
+    private func microphoneMetadata(for deviceId: AudioObjectID) -> MicrophoneMetadata {
+        let transport = readUInt32(deviceId, selector: kAudioDevicePropertyTransportType)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams,
+            mScope: kAudioDevicePropertyScopeInput, mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceId, &address, 0, nil, &size) == noErr,
+              size > 0, size % UInt32(MemoryLayout<AudioStreamID>.size) == 0 else {
+            return MicrophoneMetadata(transport: transport)
+        }
+        var streams = [AudioStreamID](repeating: 0, count: Int(size) / MemoryLayout<AudioStreamID>.size)
+        guard AudioObjectGetPropertyData(deviceId, &address, 0, nil, &size, &streams) == noErr else {
+            return MicrophoneMetadata(transport: transport)
+        }
+        let count = min(streams.count, Int(size) / MemoryLayout<AudioStreamID>.size)
+        let terminals = streams.prefix(count).compactMap {
+            readUInt32($0, selector: kAudioStreamPropertyTerminalType)
+        }
+        return MicrophoneMetadata(transport: transport, inputTerminals: terminals)
+    }
+
+    private func readUInt32(_ object: AudioObjectID, selector: AudioObjectPropertySelector) -> UInt32? {
+        var address = AudioObjectPropertyAddress(mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr,
+              size == MemoryLayout<UInt32>.size else { return nil }
+        return value
     }
 
     private func hasStreams(deviceId: AudioObjectID, scope: AudioObjectPropertyScope) -> Bool {

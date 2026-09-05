@@ -31,6 +31,7 @@ struct AudioDevice: Identifiable, Equatable, Hashable {
     let name: String
     let type: AudioDeviceType
     var isConnected: Bool = true
+    var microphoneMetadata = MicrophoneMetadata()
 
     var isValid: Bool {
         id != kAudioObjectUnknown

@@ -2,6 +2,11 @@ import Foundation
 
 /// Keywords used to detect headphone-like devices and auto-categorize them
 struct HeadphoneDetection {
+    /// Speaker product lines from brands that also make headphones.
+    static let speakerKeywords: [String] = [
+        "jabra speak",
+    ]
+
     /// Device name keywords that indicate headphones/earbuds
     static let keywords: [String] = [
         // Generic terms
@@ -101,6 +106,9 @@ struct HeadphoneDetection {
     /// Check if a device name matches headphone patterns
     static func isHeadphone(deviceName: String) -> Bool {
         let nameLower = deviceName.lowercased()
+        if speakerKeywords.contains(where: { nameLower.contains($0) }) {
+            return false
+        }
         return keywords.contains { nameLower.contains($0) }
     }
 }

@@ -31,6 +31,8 @@ struct AudioDevice: Identifiable, Equatable, Hashable {
     let name: String
     let type: AudioDeviceType
     var isConnected: Bool = true
+    /// CoreAudio transport type (kAudioDeviceTransportType*); 0 when unknown, e.g. for disconnected devices
+    var transportType: UInt32 = 0
 
     var isValid: Bool {
         id != kAudioObjectUnknown

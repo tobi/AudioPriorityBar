@@ -22,6 +22,7 @@ A native macOS menu bar app that automatically manages audio device priorities. 
 - **Drag-to-reorder**: Reorder devices by dragging or using up/down arrows.
 - **Volume control**: Adjust volume with slider or scroll wheel.
 - **Menu bar integration**: Shows current mode icon and volume percentage.
+- **Launch at login**: Toggle in Settings (gear icon in the footer).
 
 ## Installation
 
@@ -68,7 +69,7 @@ Check the [Releases](https://github.com/tobi/AudioPriorityBar/releases) page for
 
 - **Move to Speakers/Headphones**: Change device category
 - **Ignore as [category]**: Hide from current category only
-- **Ignore entirely**: Hide from both speaker and headphone lists
+- **Ignore as speaker and headphones**: Hide from both speaker and headphone lists
 - **Forget Device**: Remove disconnected device from memory
 
 ### Edit Mode
@@ -92,13 +93,17 @@ Click "Edit" in the footer to:
 AudioPriorityBar/
 ├── AudioPriorityBarApp.swift    # App entry, MenuBarExtra, AudioManager
 ├── Models/
-│   └── AudioDevice.swift        # Device model, OutputCategory enum
+│   ├── AudioDevice.swift        # Device model, OutputCategory enum
+│   ├── DeviceIcon.swift         # Hardware-type icon for each device
+│   └── Headphones.swift         # Headphone name detection
 ├── Services/
 │   ├── AudioDeviceService.swift # CoreAudio wrapper
+│   ├── LaunchAtLoginManager.swift # Launch at login (SMAppService)
 │   └── PriorityManager.swift    # Priority persistence
 └── Views/
     ├── MenuBarView.swift        # Main popover UI
-    └── DeviceListView.swift     # Device list and row components
+    ├── DeviceListView.swift     # Device list and row components
+    └── SettingsView.swift       # Settings window (launch at login, About)
 ```
 
 ## Contributing

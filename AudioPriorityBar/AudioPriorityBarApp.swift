@@ -13,6 +13,10 @@ struct AudioPriorityBarApp: App {
             Image(systemName: "speaker.wave.2.fill")
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView()
+        }
     }
 }
 
@@ -149,6 +153,13 @@ class AudioManager: ObservableObject {
     func setVolume(_ newVolume: Float) {
         volume = newVolume
         deviceService.setOutputVolume(newVolume)
+    }
+
+    /// The current default output device, including ignored ones (it may have been chosen outside the app)
+    var activeOutputDevice: AudioDevice? {
+        guard let id = currentOutputId else { return nil }
+        let all = speakerDevices + headphoneDevices + hiddenSpeakerDevices + hiddenHeadphoneDevices
+        return all.first { $0.id == id && $0.isConnected }
     }
 
     var activeOutputDevices: [AudioDevice] {
@@ -319,7 +330,9 @@ class AudioManager: ObservableObject {
         } else if let cat = category {
             priorityManager.unhideDevice(device, fromCategory: cat)
         } else {
-            priorityManager.unhideDevice(device)
+            // No category means un-ignore everywhere, undoing hideDeviceEntirely too
+            priorityManager.unhideDevice(device, fromCategory: .speaker)
+            priorityManager.unhideDevice(device, fromCategory: .headphone)
         }
         refreshDevices()
     }

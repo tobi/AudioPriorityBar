@@ -17,10 +17,17 @@ struct DeviceListView: View {
     @State private var draggingIndex: Int? = nil
     @State private var targetIndex: Int? = nil
     
-    private let rowHeight: CGFloat = 32
+    private let rowHeight: CGFloat = 26
+
+    /// Rows span the full window width; this insets their content to match the section headers
+    static let horizontalInset: CGFloat = 16
+    /// Width of the priority number / checkmark / drag handle column
+    static let priorityColumnWidth: CGFloat = 16
+    static let rowVerticalPadding: CGFloat = 4
+    static let rowSpacing: CGFloat = 2
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: DeviceListView.rowSpacing) {
             ForEach(Array(devices.enumerated()), id: \.element.id) { index, device in
                 DraggableDeviceRow(
                     device: device,
@@ -117,6 +124,20 @@ struct DraggableDeviceRow: View {
         isDisconnected || isHiddenSection
     }
 
+    var isActive: Bool {
+        isSelected && !isDisconnected
+    }
+
+    /// Text color for the row; the actions menu icon matches it
+    var rowTextColor: Color {
+        isActive ? .appAccent : (isGrayed || isNeverUse ? .secondary : .primary)
+    }
+
+    /// The output category the device is currently assigned to
+    var currentCategory: OutputCategory {
+        audioManager.priorityManager.getCategory(for: device)
+    }
+
     var isNeverUse: Bool {
         audioManager.isNeverUse(device)
     }
@@ -126,9 +147,8 @@ struct DraggableDeviceRow: View {
             return "wifi.slash"
         } else if isIgnored && audioManager.isEditMode {
             return "eye.slash"
-        } else if isNeverUse {
-            return "nosign"
         }
+        // Never-use devices are shown with strikethrough text instead of an icon
         return nil
     }
 
@@ -145,7 +165,9 @@ struct DraggableDeviceRow: View {
     }
     
     private func calculateTarget(offset: CGFloat) -> Int? {
-        let rowsOffset = Int(round(offset / rowHeight))
+        // Distance from one row's top to the next row's top
+        let rowPitch = rowHeight + 2 * DeviceListView.rowVerticalPadding + DeviceListView.rowSpacing
+        let rowsOffset = Int(round(offset / rowPitch))
         var newTarget = index + rowsOffset
         newTarget = max(0, min(deviceCount, newTarget))
         
@@ -153,6 +175,109 @@ struct DraggableDeviceRow: View {
             return nil
         }
         return newTarget
+    }
+
+    private let actionsMenuWidth: CGFloat = 24
+    private let nameFadeWidth: CGFloat = 20
+
+    /// Opaque everywhere except, while the actions menu is showing, a fade into the area it covers
+    private var nameFadeMask: some View {
+        let showsMenu = isHovering && !isDragging
+        return HStack(spacing: 0) {
+            Rectangle()
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: showsMenu ? nameFadeWidth : 0)
+            Color.clear
+                .frame(width: showsMenu ? actionsMenuWidth : 0)
+        }
+    }
+
+    private var actionsMenu: some View {
+        ZStack {
+            if isHovering && !isDragging {
+                Group {
+                Menu {
+                if isHiddenSection || isIgnored {
+                    Button {
+                        audioManager.unhideDevice(device)
+                    } label: {
+                        Label("Stop Ignoring", systemImage: "eye")
+                    }
+                } else {
+                    if let onHide {
+                        Button {
+                            onHide(device)
+                        } label: {
+                            let categoryLabel = device.type == .input ? "microphone" :
+                                (category == .headphone ? "headphone" : "speaker")
+                            Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
+                        }
+
+                        if device.type == .output {
+                            Button {
+                                audioManager.hideDeviceEntirely(device)
+                            } label: {
+                                Label("Ignore as speaker and headphones", systemImage: "eye.slash.fill")
+                            }
+                        }
+                    }
+                }
+
+                if isDisconnected {
+                    Divider()
+                    Button(role: .destructive) {
+                        audioManager.priorityManager.forgetDevice(device.uid)
+                        audioManager.refreshDevices()
+                    } label: {
+                        Label("Forget Device", systemImage: "trash")
+                    }
+                }
+
+                if device.isConnected {
+                    Divider()
+                    Button {
+                        audioManager.setNeverUse(device, neverUse: !audioManager.isNeverUse(device))
+                    } label: {
+                        if audioManager.isNeverUse(device) {
+                            Label("Allow Use", systemImage: "checkmark.circle")
+                        } else {
+                            Label("Never Use", systemImage: "nosign")
+                        }
+                    }
+                }
+
+                if showCategoryPicker {
+                    Divider()
+                    Button {
+                        audioManager.setCategory(.speaker, for: device)
+                    } label: {
+                        Label("Move to Speakers", systemImage: "speaker.wave.2.fill")
+                    }
+                    .disabled(currentCategory == .speaker)
+                    Button {
+                        audioManager.setCategory(.headphone, for: device)
+                    } label: {
+                        Label("Move to Headphones", systemImage: "headphones")
+                    }
+                    .disabled(currentCategory == .headphone)
+                }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(rowTextColor)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                // .borderlessButton draws the label through AppKit and ignores its color
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+        }
+        .frame(width: actionsMenuWidth)
+        .animation(.easeInOut(duration: 0.12), value: isHovering)
     }
 
     var body: some View {
@@ -164,16 +289,17 @@ struct DraggableDeviceRow: View {
                     Image(systemName: "line.3.horizontal")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
-                        .frame(width: 36, height: rowHeight)
+                        .frame(width: DeviceListView.priorityColumnWidth, height: rowHeight)
                         .opacity(isHovering || isDragging ? 1 : 0)
                         .scaleEffect(isHovering || isDragging ? 1 : 0.8)
                     
-                    // Priority number or "Active" label when not hovering
+                    // Priority number or active checkmark when not hovering
                     Group {
-                        if isSelected && !isDisconnected {
-                            Text("Active")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.accentColor)
+                        if isActive {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.appAccent)
+                                .accessibilityLabel("Active")
                         } else {
                             Text("\(index + 1)")
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -183,30 +309,37 @@ struct DraggableDeviceRow: View {
                     .opacity(isHovering || isDragging ? 0 : 1)
                     .scaleEffect(isHovering || isDragging ? 0.8 : 1)
                 }
-                .frame(width: 36)
+                .frame(width: DeviceListView.priorityColumnWidth)
                 .animation(.easeInOut(duration: 0.12), value: isHovering)
                 .animation(.easeInOut(duration: 0.12), value: isDragging)
             }
 
             // Device name - use HStack with tap gesture instead of Button to not interfere with drag
             HStack(spacing: 8) {
+                Image(systemName: device.hardwareIcon(category: category))
+                    .font(.system(size: 12))
+                    .foregroundColor(isActive ? .appAccent : .secondary)
+                    .frame(width: 18)
+
                 Text(device.name)
                     .font(.system(size: 13, weight: .regular))
                     .strikethrough(isNeverUse, color: .secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .foregroundColor(isGrayed || isNeverUse ? .secondary : .primary)
+                    .foregroundColor(rowTextColor)
 
                 if let icon = statusIcon {
                     Image(systemName: icon)
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundColor(isActive ? .appAccent : .secondary.opacity(0.7))
+                        .fixedSize()
                 }
 
                 if let lastSeen = lastSeenText {
                     Text(lastSeen)
                         .font(.system(size: 10))
                         .foregroundColor(.secondary.opacity(0.6))
+                        .fixedSize()
                 }
 
                 if isMuted {
@@ -216,125 +349,29 @@ struct DraggableDeviceRow: View {
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(Color.red))
+                        .fixedSize()
                 }
 
-                Spacer(minLength: 12)
-
-                if isSelected && !isDisconnected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.system(size: 15))
-                        .transition(.scale.combined(with: .opacity))
-                }
+                Spacer(minLength: 0)
             }
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-
-            // Actions menu - always reserve space to prevent layout shifts
-            ZStack {
-                // Invisible placeholder to reserve space
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 14))
-                    .frame(width: 28, height: 28)
-                    .opacity(0)
-                
-                // Actual menu (shown on hover)
-                if isHovering && !isDragging {
-                    Group {
-                    Menu {
-                    if showCategoryPicker {
-                        Button {
-                            audioManager.setCategory(.speaker, for: device)
-                        } label: {
-                            Label("Move to Speakers", systemImage: "speaker.wave.2.fill")
-                        }
-                        Button {
-                            audioManager.setCategory(.headphone, for: device)
-                        } label: {
-                            Label("Move to Headphones", systemImage: "headphones")
-                        }
-                        Divider()
-                    }
-
-                    if isHiddenSection || isIgnored {
-                        Button {
-                            audioManager.unhideDevice(device)
-                        } label: {
-                            Label("Stop Ignoring", systemImage: "eye")
-                        }
-                    } else {
-                        if let onHide {
-                            Button {
-                                onHide(device)
-                            } label: {
-                                let categoryLabel = device.type == .input ? "microphone" :
-                                    (category == .headphone ? "headphone" : "speaker")
-                                Label("Ignore as \(categoryLabel)", systemImage: "eye.slash")
-                            }
-
-                            if device.type == .output {
-                                Button {
-                                    audioManager.hideDeviceEntirely(device)
-                                } label: {
-                                    Label("Ignore entirely", systemImage: "eye.slash.fill")
-                                }
-                            }
-                        }
-                    }
-
-                    if isDisconnected {
-                        Divider()
-                        Button(role: .destructive) {
-                            audioManager.priorityManager.forgetDevice(device.uid)
-                            audioManager.refreshDevices()
-                        } label: {
-                            Label("Forget Device", systemImage: "trash")
-                        }
-                    }
-
-                    if device.isConnected {
-                        Divider()
-                        Button {
-                            audioManager.setNeverUse(device, neverUse: !audioManager.isNeverUse(device))
-                        } label: {
-                            if audioManager.isNeverUse(device) {
-                                Label("Allow Use", systemImage: "checkmark.circle")
-                            } else {
-                                Label("Never Use", systemImage: "nosign")
-                            }
-                        }
-                    }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .menuStyle(.borderlessButton)
-                    }
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                }
-            }
-            .frame(width: 32)
-            .animation(.easeInOut(duration: 0.12), value: isHovering)
+            // The actions menu overlays the end of the row instead of reserving space,
+            // so names use the full width; fade the name out underneath it while hovering
+            .mask(nameFadeMask)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 10)
-        .padding(.vertical, 5)
+        .overlay(alignment: .trailing) { actionsMenu }
+        .padding(.leading, DeviceListView.horizontalInset)
+        .padding(.trailing, DeviceListView.horizontalInset - 2)  // the menu icon has its own padding
+        .padding(.vertical, DeviceListView.rowVerticalPadding)
         .opacity(isDragging ? 0.5 : (isGrayed ? 0.6 : 1.0))
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected && !isDisconnected ? Color.accentColor.opacity(0.12) : (isHovering ? Color.primary.opacity(0.06) : Color.clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected && !isDisconnected ? Color.accentColor.opacity(0.8) : Color.clear, lineWidth: 1.5)
+            Rectangle()
+                .fill(isHovering ? Color.primary.opacity(0.06) : Color.clear)
         )
         // Drop indicator above this row
         .overlay(alignment: .top) {
             if isDropTarget {
                 DropIndicatorLine()
-                    .offset(y: -5)
+                    .offset(y: -DeviceListView.rowSpacing / 2)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
         }
@@ -342,7 +379,7 @@ struct DraggableDeviceRow: View {
         .overlay(alignment: .bottom) {
             if isDropTargetBelow {
                 DropIndicatorLine()
-                    .offset(y: 5)
+                    .offset(y: DeviceListView.rowSpacing / 2)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
         }
@@ -353,18 +390,17 @@ struct DraggableDeviceRow: View {
         }
         // Highlight the dragged row with a border instead of moving it
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isDragging ? Color.accentColor : Color.clear, lineWidth: 2)
+            Rectangle()
+                .stroke(isDragging ? Color.appAccent : Color.clear, lineWidth: 2)
         )
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .animation(.easeInOut(duration: 0.15), value: isHovering)
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isDragging)
         .animation(.easeInOut(duration: 0.1), value: isDropTarget)
         .animation(.easeInOut(duration: 0.1), value: isDropTargetBelow)
         .contentShape(Rectangle())
         .onTapGesture {
-            if !isDisconnected && audioManager.isCustomMode {
+            if !isDisconnected && audioManager.isCustomMode && !audioManager.isEditMode {
                 onSelect()
             }
         }
@@ -393,10 +429,10 @@ struct DropIndicatorLine: View {
     var body: some View {
         HStack(spacing: 0) {
             Circle()
-                .fill(Color.accentColor)
+                .fill(Color.appAccent)
                 .frame(width: 6, height: 6)
             Rectangle()
-                .fill(Color.accentColor)
+                .fill(Color.appAccent)
                 .frame(height: 2)
         }
         .padding(.horizontal, 2)
